@@ -45,6 +45,7 @@
 - [Environment Configuration](#-environment-configuration)
 - [Seed & Demonstration Data](#-seed--demonstration-data)
 - [Keyboard Shortcuts & Power Features](#-keyboard-shortcuts--power-features)
+- [Contributors & Co-Authorship](#-contributors--co-authorship)
 - [License](#-license)
 
 ---
@@ -320,6 +321,15 @@ Designed for rapid, mouse-free operations in busy logistics offices:
 | `Cmd + H` or `Ctrl + H` | Open "+ New House B/L" Modal |
 | `Cmd + I` or `Ctrl + I` | Open "+ New Invoice" Builder |
 | `Esc` | Close any active modal or overlay |
+
+---
+
+## 🤝 Contributors & Co-Authorship
+
+This enterprise platform was developed and documented in joint collaboration:
+
+- **Co-authored with**: [@mapsunitedconsultancy-wq](https://github.com/mapsunitedconsultancy-wq)
+- **Collaborative Initiative & Reference**: [mapsunitedconsultancy-wq/QuickCL#15](https://github.com/mapsunitedconsultancy-wq/QuickCL/pull/15) — Multi-modal logistics workflows, ICEGATE manifest specifications, container control schemas, and enterprise freight operational architectures.
 
 ---
 
