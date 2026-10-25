@@ -1,0 +1,526 @@
+# MAPS NVOCC PRO v4.0 — INDUSTRY-LEVEL UPGRADE DIRECTIVE
+
+## ROLE
+You are a senior full-stack engineer and NVOCC domain expert building the definitive Indian NVOCC/MTO SaaS platform for MAPS Freight Solutions Pvt Ltd, Gandhidham, Kutch, Gujarat. The target users are small-to-mid NVOCCs operating out of Mundra, Kandla, Pipavav, and JNPT. This is a production-grade ERP that must replace legacy systems like eBMS, Logi-Sys, Softlink, and Freight Office.
+
+## CRITICAL CONTEXT — DO NOT REMOVE OR BREAK ANYTHING
+The current application has 18 working modules:
+1. Command Center (Live Mundra Sync + FX ticker + Priority bar + KPI tiles + Live shipment stream)
+2. Shipments (7-step wizard: Basic → Parties → Route → Cargo → Vessel → Charges → Review)
+3. House B/L (3-tab issuance with Link-to-Booking + Custom Direct Entry)
+4. Master B/L (Carrier contracts, telex release, HBL linking)
+5. Delivery Order (3-tab wizard: Routing & BL → Consignee & CFS → Containers & Empty Return)
+6. LCL Consolidation (Payload + Volumetric utilization, pro-rata by CBM)
+7. Container Control (5 sub-tabs: Fleet, D&D Engine, CFS Calc, WhatsApp Alerts, Billing)
+8. Rates & Quotes (Carrier Rate Master, side-by-side lane comparison)
+9. Invoicing & GST (CGST+SGST/IGST, SAC codes 996521/996611/996713, aging)
+10. Party Master CRM (31 verified accounts, 7 party types)
+11. Agent Accounting (Multi-currency, SWIFT settlements, reconciliation)
+12. Document Vault + AI OCR (20+ doc types, Gemini OCR extraction)
+13. Communication Hub (AiSensy WhatsApp + SMTP, 20+ templates)
+14. Reports & MIS (DSR, Monthly TEU, Margin P&L, GSTR-1, CFS Dwell)
+15. AI Insights (Risk, Margin Optimization, Client Re-engagement, Carrier Reliability)
+16. Settings & Admin (7 tabs: Firm Identity, Branding, Audit, Banks, Numbering, Integrations, Subscription)
+17. Customer Portal (/portal — Shipper self-service)
+18. Public Tracking (/track — Milestone journey, shareable link)
+
+Existing RBAC personas: Super Admin, Operations (Utsav), Finance (Seema), Sales (Rahul), Customer (Krishna Ceramics).
+
+**MANDATE: ADD ONLY. Do not remove, rename, or restructure any existing module. All new features INTEGRATE with the existing navigation and data model.**
+
+---
+
+## PART A — SEVEN NEW SIDEBAR MODULES TO ADD
+
+### A1. Export Manifest (EGM) — Add as sidebar item under NVOCC Operations
+**Position**: Below "Delivery Order (DO)" in sidebar.
+**Icon**: Ship departing.
+**Badge**: Shows count of pending-to-file manifests when > 0 (red).
+
+**Screen 1 — Pending Manifests Table**:
+Columns: Vessel/Voyage, POL, Sailed Date, HBL Count, Filing Deadline (7 days from sailing), Status (Draft/Filed/Amended), Action.
+Status chips with countdown timer. Red if < 48 hours left.
+
+**Screen 2 — EGM Builder (click any vessel)**:
+Auto-pulls every HBL + MBL sailed on that vessel. Shows a validation panel:
+- Total HBLs: X
+- Complete HBLs: Y / X
+- Missing fields highlighted (gross weight, HS code, consignee IEC, etc.)
+- Preview manifest in ICEGATE-compliant tabular format
+- Export buttons: Download CSV (ICEGATE upload format), Download PDF (internal), Mark as Filed (requires IEM number input)
+
+**Screen 3 — Amendment Workflow**:
+If data changes after filing → generate Supplementary EGM with change log, prior values, new values, reason code dropdown (DGFT reasons).
+
+**Integration**: On Command Center priority bar, surface "EGM filing deadline approaching" alerts.
+
+### A2. Import Manifest (IGM) — Add as sidebar item under NVOCC Operations
+**Position**: Below "Export Manifest (EGM)".
+
+**Screen 1 — Inbound Vessels Grid**:
+Shows all vessels expected at Mundra/Kandla in next 30 days. Columns: Vessel/Voyage, Agent (origin), ETA, HBL Count received, IGM Status (Pending / Partial / Full), Line IGM Match % (reconciliation score).
+
+**Screen 2 — Agent Manifest Upload**:
+Drag-drop Excel/CSV from overseas agent OR paste email body. Gemini parses → shows a review table with:
+- Each HBL row with shipper, consignee (with GSTIN auto-match), container, cargo, weight
+- Red flag if consignee IEC not registered on IEC master
+- Green check if container appears in Line's IGM
+
+**Screen 3 — Arrival Notices (bulk)**:
+Select vessel → generates arrival notice for every consignee → sends via WhatsApp + email → logs in Communication Hub. Notice must include: Vessel/Voyage/ETA, Container, HBL ref, Charges payable to clear (DO fee + THC + CFS estimate), Original BL requirement, Payment instructions.
+
+**Integration**: IGM records flow directly into DO issuance wizard as "Associated Inbound Shipment" dropdown source.
+
+### A3. Shipping Instructions (SI) — Add as sidebar item
+**Position**: Below "House B/L (HBL)".
+
+**Screen 1 — SI Inbox**:
+Three channels: WhatsApp SI (from AiSensy webhook), Portal SI (from Customer Portal submissions), Email SI (SMTP parse). Each shows sender, received time, shipment ref (if matched), status (Unparsed / Parsed / Converted to HBL Draft).
+
+**Screen 2 — SI Parser**:
+Click any SI → Gemini extracts fields → shows side-by-side: Original SI text/image | Extracted structured fields | Match to existing booking (fuzzy match on BL draft or booking ref). User confirms → auto-creates HBL draft and links the SI as source document in Vault.
+
+**Portal addition**: On Customer Portal (/portal), add a "Submit SI" button that opens a form (shipper, consignee, cargo, container, special instructions) OR allows upload of a PDF/image/Excel SI.
+
+### A4. Quotation Pipeline (Sales CRM) — Add as sidebar item under NVOCC Operations
+**Position**: Below "Rates & Quotes".
+**Note**: Rates & Quotes stays as the rate master. This new module is the SALES PIPELINE.
+
+**Screen 1 — Quote Funnel (Kanban)**:
+Columns: RFQ Received → Quote Drafted → Sent to Customer → Negotiating → Won → Lost (with reason) → Expired.
+Each card: Customer, Route, Container count, Value, Age (days in stage).
+Filter by Sales person, trade lane, customer, date range.
+
+**Screen 2 — RFQ Intake**:
+Customer requests rate (via WhatsApp, email, portal, or manual entry). Fields: Customer (CRM lookup), POL, POD, Container type, Count, Commodity, Target rate (if any), Required by date.
+
+**Screen 3 — Quote Builder**:
+Pulls rates from Rate Master → shows multiple carrier options → user picks → adds margin → generates branded quote PDF → emails/WhatsApps → marks as Sent.
+
+**Screen 4 — Pipeline Analytics**:
+Win rate %, average quote-to-close time, average margin, top sales persons, top trade lanes by won value, loss reasons breakdown. Specifically for the "Sales (Rahul)" persona dashboard.
+
+### A5. CHA & Shipping Bill Tracker — Add as sidebar item
+**Position**: Below "Shipments".
+
+**Screen 1 — CHA Jobs Grid**:
+Every export shipment with CHA details. Columns: Shipment ref, CHA Name, Shipping Bill No., SB Date, LEO Date, Duty Status, Current Stage (SB Filed / Examined / LEO / Loaded).
+
+**Screen 2 — Per-Shipment CHA Panel**:
+Also appears as a tab inside Shipments detail. Fields: CHA selection (from Party Master), SB number entry, LEO date, examination date, DEPB/Drawback/RoDTEP eligibility checkbox and scheme reference, duty paid amount, documents (SB copy, LEO copy, EP copy).
+
+**Screen 3 — ICEGATE Status Check**:
+On click, query ICEGATE API (or at minimum, open ICEGATE SB status page with the SB number pre-filled). Log the result timestamp.
+
+### A6. Transporter / Trucking Jobs — Add as sidebar item
+**Position**: Below "Container Control".
+
+**Screen 1 — Trip Dashboard**:
+All active trucking jobs: Container, Route (From → To), Transporter (from CRM), LR Number, Truck Number, Driver Name/Phone, Scheduled Pickup, Actual Pickup, Delivered Time, Status.
+
+**Screen 2 — Trip Card (per trip)**:
+Trip type (Empty Pickup, Factory to CFS, CFS to Port, Port to Factory, Empty Return), Rate agreed, Fuel surcharge, Detention charge, POD photo upload, Container seal photo, LR copy upload.
+Link to parent shipment auto-updates shipment timeline when trip completes.
+
+**Screen 3 — Transporter Rate Card**:
+Per-transporter rate matrix: Origin → Destination → Container type → Rate (base + fuel + wait). Auto-apply when creating a trip.
+
+### A7. Dangerous Goods (IMDG) Module — Add as sidebar item
+**Position**: Below "Document Vault".
+
+**Screen 1 — DG Shipments List**:
+All shipments flagged DG. Columns: UN Number, Proper Shipping Name, IMDG Class, Packing Group, Flashpoint, Status (DGD Submitted / Carrier Approved / Loaded).
+
+**Screen 2 — UN Database Lookup**:
+Searchable database of UN numbers. Enter UN1230 → auto-fills Proper Shipping Name (Methanol), Class (3), PG (II), Marine Pollutant (No), Segregation group.
+
+**Screen 3 — DGD (Dangerous Goods Declaration) Generator**:
+Auto-fills from shipment data + UN lookup. Shipper's Declaration format compliant with IMDG Code. Downloadable PDF with signature block.
+
+**Screen 4 — Segregation Checker (for Consolidation)**:
+When consolidating LCL cargo, if two or more DG items are present, run IMDG segregation table and flag incompatibilities with explanation.
+
+**Screen 5 — Carrier Approval Tracker**:
+After DGD submission to carrier → log carrier approval reference (MAEU DG booking ref) → shipment can proceed to loading only after this is marked received.
+
+---
+
+## PART B — ENHANCE EXISTING MODULES (ADDITIVE ONLY)
+
+### B1. Command Center — Add 4 new widgets
+- **EGM Filing Deadline widget**: Shows next 3 vessels pending EGM filing with countdown timers.
+- **Pending SI widget**: Count of SIs received but not yet converted to HBL drafts.
+- **Approval Queue widget**: Items awaiting Admin approval (discounts, DO releases, write-offs).
+- **Role-Based Dashboard Switch**: When Operations/Finance/Sales persona is active, swap the KPI tiles to show their specific KPIs. Operations: shipment stage counts, DO due today, CFS inventory. Finance: receivables aging, agent settlement due, GST liability. Sales: pipeline value, quotes awaiting response, win rate 30-day trend.
+
+### B2. Shipments — Add tabs inside shipment detail
+Already-present tabs stay. Add:
+- **SI Tab**: Shows original SI received + parsing confidence + current HBL diff
+- **CHA Tab**: Shipping Bill details, LEO, DBK/RoDTEP tracking
+- **Trucking Tab**: All trips linked to this shipment
+- **DG Tab**: Appears only if DG — DGD, carrier approval
+- **Approvals Tab**: Any pending approval items for this shipment
+- **Audit Trail Tab**: Full change log of every field edited, by whom, when
+
+### B3. House B/L — Add BL Template Editor
+In Settings & Admin → Firm Branding & Letterhead, add a new sub-tab: "BL Template Designer". Each tenant can:
+- Upload logo (header)
+- Configure BL number format with prefix/suffix/sequence (e.g., MAPS/HBL/YYYY/00001)
+- Set front-side layout: drag-position Shipper/Consignee/Notify boxes, routing section, cargo description, freight section
+- Set back-side T&C text (standard MTO/COGSA/Hague-Visby clauses pre-loaded, editable)
+- Multiple named templates per tenant (e.g., "Standard Export BL", "Negotiable LC BL", "Seaway BL")
+- Preview with sample data before saving
+- Default template per trade lane / shipping line
+
+### B4. Delivery Order — Add workflow enforcements
+- **Surrender Lock**: DO issuance is blocked unless HBL status is "Surrendered" or "Telex Released" or admin manually overrides with reason.
+- **Payment Lock**: DO issuance checks that invoices against the HBL have Status = Paid. If partial, show outstanding and require Finance/Admin approval.
+- **Partial DO**: Allow issuing DO for a subset of containers (e.g., 2 of 5 containers released now).
+- **Agent DO Approval Flow**: Overseas agent requests DO issuance → request appears in Approval Queue → Operations approves → Agent gets confirmation to print/release.
+- **DO Register**: Add a tab in DO module — chronological list of all DOs issued, filterable by date, consignee, status, CFS, and audit log of changes.
+
+### B5. Container Control — Add 2 sub-tabs
+- **6. Container Repositioning**: For NVOCCs with own equipment. Tracks empty container movements between depots (surplus location → deficit location), repositioning cost, projected ROI.
+- **7. EIR Management**: Equipment Interchange Receipt lifecycle. Pickup EIR (from depot), In-gate EIR (at port), Out-gate EIR (at destination), Return EIR (empty return). Each EIR carries container condition photos + inspector sign-off.
+
+### B6. Rates & Quotes — Add granular surcharges + Spot vs Contract
+Extend the carrier rate card:
+- Base Ocean Freight (currency, per container type)
+- BAF (Bunker Adjustment Factor)
+- CAF (Currency Adjustment Factor)
+- EBS (Emergency Bunker Surcharge)
+- LSS (Low Sulphur Surcharge)
+- GRI (General Rate Increase) with effective date
+- Peak Season Surcharge (PSS)
+- War Risk Surcharge
+- Piracy Surcharge
+- Port Congestion Surcharge
+- Rate type flag: Spot / Contract / NAC (Named Account)
+- Contract reference for Contract rates (upload PDF of contract)
+- Volume commitment and achievement meter
+
+### B7. Invoicing & GST — Add e-Invoice (IRN) and e-Way Bill
+- **IRN Generation**: For taxable value > ₹5 crore turnover tenants, auto-generate IRN via GST portal API. Store IRN, Ack No., Ack Date, QR code. Display QR on invoice PDF.
+- **e-Way Bill**: For domestic trucking legs, generate EWB via EWB portal API (or at minimum, open EWB portal with pre-filled fields).
+- **Credit Note / Debit Note workflow**: Formal CN/DN generation with reason codes, reference to original invoice, auto-adjustment of GST liability.
+- **Payment reconciliation**: Match bank statement entries to invoices. Semi-automatic matching with manual override.
+
+### B8. Party Master CRM — Add Credit Risk Engine
+Beyond credit limit + outstanding, add:
+- Credit score (0-100): computed from payment history, average days-to-pay, bounce count, disputes, order value trend
+- Watchlist flag (manual + auto-triggered)
+- Credit review schedule (quarterly auto-prompt)
+- Insurance coverage status per customer
+- Blocklist (parties banned from booking without pre-payment)
+
+### B9. Agent Accounting — Add Commission & Profit-Split Automation
+- Commission structure per agent (flat / tiered / revenue-share)
+- Auto-calculate commission on each shipment with that agent
+- Profit-split logic for jointly serviced lanes
+- Running commission balance per agent in their ledger
+- Monthly commission statement PDF generation
+
+### B10. Document Vault — Add Document Expiry Tracking
+- For each uploaded doc type that has validity (Phytosanitary, Fumigation Cert, DG MSDS, Carrier contract, Customer PAN/GST), capture validity dates
+- Dashboard widget: Documents expiring in 30 days
+- Auto-reminder to responsible party
+
+### B11. Communication Hub — Add Conversational WhatsApp Bot
+Beyond templates, build a Gemini-powered bot:
+- Shipper WhatsApps "status MAPS-249289" → bot responds with current milestone
+- "rate MUN to JEA 20FT dry 5 containers" → bot pulls Rate Master → responds with quote
+- "DO for HBL 246483" → bot checks eligibility → if clear, triggers DO draft → if blocked, states reason (pending surrender/payment)
+- "arrived?" → bot replies with current container location/status
+Bot logs every interaction to the party's communication log.
+
+### B12. Reports & MIS — Add 3 new reports
+- **Agent Profitability Report**: Revenue - agent charges - commission per agent per month
+- **CHA Performance Report**: Avg LEO turnaround per CHA, exceptions
+- **Carrier Utilization Report**: TEUs booked vs TEUs allocated per carrier contract (commitment tracking)
+
+### B13. AI Insights — Add 4 new insight categories
+- **Compliance Risk**: EGM pending > deadline, VGM missing before cutoff, DG approval pending before loading
+- **Cash Flow Forecast**: Based on expected invoice collection dates and known payables (agent settlements, carrier payments)
+- **Demand Forecast**: ML on past shipment patterns to predict next 30-day volume per trade lane
+- **Anomaly Detection**: Flag shipments with abnormal cost (>2 std dev from lane average), unusual customer payment patterns, atypical consolidation utilization
+
+### B14. Settings & Admin — Add 4 new sub-tabs
+- **Branch Management**: Multi-branch (Gandhidham HO, Mumbai, Chennai). Each branch gets own numbering, bank account mapping, user scoping. Consolidated reporting across branches.
+- **Approval Chains Config**: Define approval rules — e.g., "Discount > 10% requires Finance approval", "DO release with unpaid invoice requires Admin approval", "Write-off > ₹50K requires Admin approval".
+- **Integration Hub**: ICEGATE, GSTIN, EWB, AiSensy, Razorpay, Tally, Zoho Books, SeaRates/ShipsGo tracking API, carrier EDI (where available).
+- **API Keys & Webhooks**: For tenant's own integrations.
+
+---
+
+## PART C — NEW WORKFLOWS TO IMPLEMENT
+
+### C1. Approval Chain Engine
+A unified approval system:
+- Any user action that triggers an approval rule (defined in Settings) creates an Approval Request
+- Routed to the configured role (Operations/Finance/Admin)
+- Appears in that role's Approval Queue widget on Command Center
+- Approver sees context, can approve/reject with reason
+- Original user is notified of outcome
+- All approval decisions appear in Audit Log
+
+Rules to pre-configure:
+- Quote discount > 10% → Finance approval
+- Quote discount > 25% → Admin approval
+- DO release with unpaid invoice → Finance approval
+- Credit limit increase → Admin approval
+- Invoice write-off > ₹25,000 → Finance approval
+- Invoice write-off > ₹1,00,000 → Admin approval
+- Agent payment > ₹5,00,000 → Admin approval
+- Rate override on booking (below cost) → Admin approval
+
+### C2. Rolling Cargo / Short-Shipped Handling
+When cargo booked for a vessel does not load (missed cutoff, no space, documentation delay):
+- "Mark as Rolled" button on shipment
+- Prompts: Reason (no space / cutoff missed / documentation / port congestion / customer request), New Vessel (dropdown of next sailings on same lane), New ETD/ETA, Customer notification required (auto-send WhatsApp)
+- Timeline event logged
+- If rolled > 2 times, auto-flag for Operations review
+
+### C3. Letter of Credit (LC) Workflow
+For LC-based exports:
+- LC tab on shipment: LC number, issuing bank, advising bank, latest shipment date, LC expiry, beneficiary bank
+- Document checklist per LC terms (which docs are mandatory in bank set)
+- "Prepare Bank Set" action: generates PDF package of HBL (3 originals), commercial invoice, packing list, insurance, certificate of origin, phytosanitary, inspection cert, SDF, bill of exchange, as applicable
+- Flag discrepancies before dispatch (e.g., HBL date later than latest shipment date = DISCREPANCY)
+- Track bank set dispatch (courier, AWB), bank acknowledgment, payment realization
+
+### C4. Marine Insurance Module
+- Policy types: Open policy (annual), Specific policy (per shipment), Declared value coverage
+- Per-shipment: Insured value, premium, policy number, insurer, cover type (ICC A/B/C)
+- Auto-generate Marine Cover Note
+- Claims module: Loss event logging, surveyor assignment, claim submission tracker
+
+### C5. Advanced Filings (Country-Specific Pre-Arrival)
+A shipment destined to:
+- USA → ISF 10+2 filing (24 hours before loading at POL)
+- EU → ENS filing (24 hours before loading)
+- Japan → AFR filing (24 hours before loading)
+- China → CSD-ADV filing
+System detects POD country, surfaces required filing in the shipment's Filings tab, with deadline countdown and status.
+
+---
+
+## PART D — INDIAN COMPLIANCE DEEP INTEGRATION
+
+### D1. ICEGATE Direct Integration (where API available)
+- Shipping Bill status check
+- EGM filing submission
+- IGM reconciliation query
+- LEO status pull
+- IEC verification
+
+### D2. GSTIN Portal Integration
+- GSTIN verification on party onboarding (real-time)
+- IRN generation
+- GSTR-1 push (quarterly/monthly)
+- Input Tax Credit (ITC) matching for inward supplies
+
+### D3. DGFT Integration
+- IEC (Importer Exporter Code) verification
+- RoDTEP eligibility check per HS code
+- DBK (Duty Drawback) rate lookup per HS code
+- Advance Authorization status
+- EPCG scheme tracking
+
+### D4. e-Way Bill (NIC Portal)
+- EWB generation for domestic truck movements
+- Vehicle number update if changed
+- Multi-vehicle (consolidated) EWB
+
+### D5. SEZ Handling
+- SEZ unit flag on consignee
+- Zero-rated supply handling in invoice
+- SEZ port-of-export tracking (Mundra Free Trade Zone)
+- ARE-1 form generation for SEZ supplies
+
+---
+
+## PART E — UI / UX REFINEMENTS
+
+### E1. Universal Search Enhancement
+Current search works. Enhance to:
+- Semantic search powered by Gemini embeddings
+- Natural language: "shipments to Hamburg last month" / "Krishna Ceramics overdue invoices" / "containers at CFS more than 10 days"
+- Results grouped by entity type with inline preview
+
+### E2. Command Center — Density Toggle
+Dense mode (information-rich) vs Comfortable mode (whitespace-first). Save per user.
+
+### E3. Keyboard Shortcuts
+- ⌘K / Ctrl+K: Universal search
+- ⌘N / Ctrl+N: New shipment
+- ⌘H: New HBL
+- ⌘D: New DO
+- ⌘I: New Invoice
+- G then C: Go to Command Center (etc. — gmail-style navigation)
+- Shortcut cheatsheet in Help
+
+### E4. Table Enhancements (all list screens)
+- Column reordering (drag)
+- Column visibility (show/hide)
+- Column pinning (freeze left/right)
+- Saved views per user
+- Inline edit (double-click a cell)
+- Bulk actions bar when rows selected
+
+### E5. Dark/Light Theme Polish
+- Current dark theme is good. Add true black AMOLED variant for Mobile.
+- Light theme: Keep accent orange, improve contrast ratios to WCAG AA.
+
+### E6. Mobile Responsive & PWA
+- All screens must work at 400px width without horizontal scroll
+- Install as PWA — add manifest.json, service worker
+- Offline support for: viewing cached shipments, drafting HBLs (sync when online), checking party details, viewing uploaded documents
+- Mobile-specific quick actions: approve DO, record payment, send WhatsApp alert
+
+---
+
+## PART F — AI / AUTOMATION ADDITIONS (Gemini-powered)
+
+### F1. Gemini as a First-Class Co-pilot
+Add a persistent "Ask Claude" / "Ask Gemini" sidebar (slide-out panel) accessible on any screen. Context-aware:
+- On shipment detail: knows current shipment context, can answer "what's blocking this?" "estimated profitability?" "what's left to do?"
+- On Command Center: can answer "my worst margin lane this quarter?" "customers I haven't heard from in 30 days?"
+- Can draft WhatsApp messages, emails, invoices, follow-ups
+
+### F2. Document AI Expansion
+Beyond current OCR:
+- Auto-detect doc type from upload (invoice vs BL vs packing list vs certificate)
+- Auto-link to shipment via fuzzy match on BL number, container, party name
+- Flag discrepancies (invoice amount vs HBL freight, cargo description mismatch)
+
+### F3. Smart Consolidation Assistant
+Given a batch of pending LCL bookings, Gemini suggests optimal grouping:
+- Maximizes container utilization (CBM + weight)
+- Respects commodity compatibility (IMDG segregation, food vs chemicals)
+- Minimizes total ocean freight cost
+- Shows savings vs manual grouping
+
+### F4. Predictive ETAs
+ML model on historical vessel reliability + current port congestion + weather → more accurate ETA than carrier schedule. Confidence interval shown.
+
+### F5. Email / WhatsApp Auto-Draft on Action
+When status changes to "Loaded", draft a WhatsApp + email to shipper in brand voice. User reviews and sends. Learns user tone over time.
+
+---
+
+## PART G — TECHNICAL / ARCHITECTURE NOTES
+
+### G1. Data Model Additions
+Add tables / collections:
+- egm_filings
+- igm_records
+- shipping_instructions
+- quotations (separate from rate_master)
+- cha_jobs
+- shipping_bills
+- trucking_trips
+- dg_declarations
+- un_dangerous_goods (reference data)
+- approval_requests
+- approval_rules
+- lc_records
+- insurance_policies
+- insurance_claims
+- advance_filings
+- credit_scores
+- commission_rules
+- commission_entries
+- branches
+- audit_log (full change log of every entity)
+
+Every table must have: tenant_id (RLS), created_at, updated_at, created_by, updated_by, deleted_at (soft delete).
+
+### G2. Row-Level Security (Supabase)
+- Every query scoped by tenant_id
+- Customer Portal users see only their shipments (shipper_party_id match)
+- Agent Portal (if added later) sees only their agent accounting records
+- Role-based column access (Finance sees costs, Operations may not)
+
+### G3. API Design
+RESTful + GraphQL for complex queries. Webhook support for every major event (shipment.status_changed, invoice.paid, do.issued, egm.filed, etc.) so tenants can integrate with Tally, Zoho, etc.
+
+### G4. Performance Targets
+- Command Center loads in < 1.5s
+- Shipment detail opens in < 800ms
+- Universal search returns in < 300ms
+- PDF generation (HBL, DO, Invoice) in < 2s
+
+### G5. Observability
+- Structured logs for every action
+- Error tracking (Sentry)
+- Usage analytics (which modules get most time, which flows have drop-off)
+- Audit log is append-only, never deletable
+
+---
+
+## PART H — ACCEPTANCE CRITERIA
+
+For each new module (A1 through A7), verify:
+- [ ] Appears in sidebar at the specified position with correct icon and badge logic
+- [ ] All screens render without horizontal scroll at 400px width
+- [ ] Dark mode and light mode both polished
+- [ ] All forms have validation + inline error messages
+- [ ] All list screens have search, filter, sort, bulk actions
+- [ ] All detail screens have audit trail tab
+- [ ] All relevant status changes trigger WhatsApp notifications via Communication Hub
+- [ ] All financial items feed into Reports & MIS
+- [ ] All new entities respect RBAC — correct personas can edit, others see read-only or hidden
+
+For enhancements (B1-B14), verify:
+- [ ] No existing feature is removed or broken
+- [ ] New sub-tabs appear in the correct parent module
+- [ ] New fields do not break existing records (nullable with defaults)
+- [ ] New workflows integrate with Approval Chain Engine where applicable
+
+For workflows (C1-C5):
+- [ ] Approval Chain triggers correctly per configured rules
+- [ ] Rolling cargo creates a new timeline event and preserves history
+- [ ] LC workflow surfaces discrepancies before dispatch
+- [ ] Marine insurance auto-generates cover note on booking confirmation
+- [ ] Country-specific pre-arrival filings surface automatically based on POD
+
+---
+
+## PART I — DEMO DATA / SEED
+
+Use the existing demo tenant (MAPS Freight Solutions Pvt Ltd, Gandhidham) and existing demo data (Krishna Ceramics, Saurashtra Minerals, Kutch Chemicals, etc.). Add:
+- 5 sample EGM filings (2 filed, 2 pending, 1 amended)
+- 8 sample IGM records (3 reconciled, 3 pending, 2 with discrepancies)
+- 12 sample Shipping Instructions (via WhatsApp, email, portal mix)
+- 20 sample Quotations across pipeline stages
+- 15 sample CHA jobs with varied LEO status
+- 25 sample Trucking Trips
+- 6 DG shipments with real UN numbers (UN1230 Methanol, UN3077 Env Hazardous, UN1263 Paint, UN1950 Aerosols)
+- 10 Approval requests (pending/approved/rejected)
+- 3 LC export shipments with bank sets prepared
+- 8 insured shipments with policies
+- 4 advance filings (2 ISF, 1 ENS, 1 AFR)
+
+Keep all currency, GSTIN, port codes, HS codes, and party details realistic and industry-accurate.
+
+---
+
+## PART J — DELIVERY
+
+Build this as an additive upgrade to the current MAPS NVOCC Pro codebase. Do not create a new app. Do not rename the project. Preserve all existing routes, components, and data.
+
+Prioritize in this order:
+1. A1 (EGM) + A2 (IGM) — compliance critical
+2. A3 (SI) + A4 (Quotation Pipeline) — revenue critical
+3. B3 (BL Template Editor) + B4 (DO workflow enforcements) — switching-barrier critical
+4. C1 (Approval Chain Engine) — operational safety
+5. B14 Integration Hub — plumbing for everything else
+6. A5 + A6 + A7 — operational depth
+7. B1-B13 refinements — polish
+8. C2-C5 — specialized workflows
+9. D (Indian compliance deep integration)
+10. E (UI refinements) + F (AI additions) + G (architecture) — ongoing
+
+End-state: MAPS NVOCC Pro v4.0, a complete Indian NVOCC/MTO SaaS platform ready to replace eBMS, Logi-Sys, and compete with international players (CargoWise, Softlink) at 1/10th the price point.
+
+Begin.

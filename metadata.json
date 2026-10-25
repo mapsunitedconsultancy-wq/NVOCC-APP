@@ -1,0 +1,8 @@
+{
+  "name": "Remix MAPS NVOCC Pro",
+  "description": "Enterprise-grade NVOCC \u0026 Freight Forwarding Management Platform for Indian Logistics and Global Trade",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
