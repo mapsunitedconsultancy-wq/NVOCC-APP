@@ -1338,16 +1338,16 @@ CREATE POLICY tenant_isolation_invoices ON invoices
 -- PART 12: REALISTIC SEED DATA (Mundra, Kandla, Nhava Sheva)
 -- ════════════════════════════════════════════════════════════════════════════
 
--- 1. Default NVOCC Tenant
+-- 1. Default NVOCC Tenant (Testing Pack Point 04)
 INSERT INTO tenants (id, code, legal_name, trade_name, gstin, pan, iec, mto_reg_no, base_currency)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
   'MAPS-GLOBAL',
   'MAPS Freight Solutions Pvt Ltd',
   'MAPS NVOCC Pro',
-  '24AAACM1234F1Z8',
-  'AAACM1234F',
-  '0305012345',
+  '24AARCM6698J1ZK',
+  'AARCM6698J',
+  'AARCM6698J',
   'MTO/DGS/2024/0981',
   'INR'
 ) ON CONFLICT (code) DO NOTHING;
@@ -1362,7 +1362,7 @@ VALUES (
   'Gandhidham',
   'Gujarat',
   '24',
-  '24AAACM1234F1Z8',
+  '24AARCM6698J1ZK',
   TRUE
 ) ON CONFLICT (tenant_id, code) DO NOTHING;
 

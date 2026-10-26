@@ -7,17 +7,17 @@ import { formatUSD, formatINR } from '../utils/formatters';
 export const ConsolidationPage: React.FC = () => {
   const { hbls, setActivePrintDoc, showToast } = useApp();
 
-  // Container configuration
-  const [containerNumber, setContainerNumber] = useState('MSKU9981245');
+  // Container configuration - Point 07 Golden LCL Consolidation (Mundra -> Jebel Ali)
+  const [containerNumber, setContainerNumber] = useState('GESU5522039');
   const [equipmentType, setEquipmentType] = useState<"20'GP" | "40'HC">("40'HC");
   const maxWeightKg = equipmentType === "40'HC" ? 28600 : 26480;
   const maxCbm = equipmentType === "40'HC" ? 76.4 : 33.2;
 
-  // LCL items in this consolidation
+  // LCL items in this consolidation - Exactly 3 Morbi shippers
   const [items, setItems] = useState([
-    { id: '1', hbl: 'MAPS-HBL-240315-01', shipper: 'Krishna Ceramics', cbm: 24.5, weight: 9800, pkgs: '450 Bags Tiles', dest: 'Hamburg' },
-    { id: '2', hbl: 'MAPS-HBL-240316-01', shipper: 'Pragati Ceramics', cbm: 22.0, weight: 8900, pkgs: '380 Cartons Wall Tiles', dest: 'Hamburg' },
-    { id: '3', hbl: 'MAPS-HBL-240318-01', shipper: 'Saurashtra Minerals', cbm: 18.0, weight: 7400, pkgs: '12 Jumbo Bags Clay', dest: 'Hamburg' }
+    { id: '1', hbl: 'MAPS-HBL-240315-01', shipper: 'Krishna Ceramics', cbm: 24.5, weight: 9800, pkgs: '450 Bags Tiles', dest: 'Jebel Ali' },
+    { id: '2', hbl: 'MAPS-HBL-240316-01', shipper: 'Pragati Ceramics', cbm: 22.0, weight: 8900, pkgs: '380 Cartons Wall Tiles', dest: 'Jebel Ali' },
+    { id: '3', hbl: 'MAPS-HBL-240318-01', shipper: 'Saurashtra Minerals', cbm: 18.0, weight: 7400, pkgs: '12 Jumbo Bags Clay', dest: 'Jebel Ali' }
   ]);
 
   // Modal for adding consignment
@@ -27,7 +27,7 @@ export const ConsolidationPage: React.FC = () => {
   const [newPkgs, setNewPkgs] = useState('');
   const [newCbm, setNewCbm] = useState(12.5);
   const [newWeight, setNewWeight] = useState(5200);
-  const [newDest, setNewDest] = useState('Hamburg');
+  const [newDest, setNewDest] = useState('Jebel Ali');
 
   // Allocation Method
   const [allocationMethod, setAllocationMethod] = useState<'weight' | 'volume' | 'equal'>('volume');
@@ -51,13 +51,18 @@ export const ConsolidationPage: React.FC = () => {
       data: {
         containerNumber,
         vessel: 'MSC JADE 437W',
+        voyage: '437W',
+        portOfLoading: 'Mundra (INMUN)',
+        portOfDischarge: 'Jebel Ali (AEJEA)',
         seal: 'KL889102',
         utilization: `${rawCbmPct}% (Volume) / ${rawWeightPct}% (Weight)`,
         totalWeight: `${totalWeight.toLocaleString()} KG`,
         totalCbm: `${totalCbm.toFixed(1)} CBM`,
+        mblNumber: 'MSCU-LCL-JEA-2026',
         hbls: items
       }
     });
+    showToast('success', 'LCL Manifest Issued', `Master B/L MSCU-LCL-JEA-2026 linked with 3 HBLs in container ${containerNumber}`);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -179,7 +184,7 @@ export const ConsolidationPage: React.FC = () => {
         </div>
 
         <div className="text-[11px] text-[#A8A299]">
-          Port of Destination: <span className="font-bold text-[#F4EFE6]">Hamburg (DEHAM)</span> • Hub: <span className="text-[#E88B2A]">Mundra Gateway CFS</span>
+          Port of Destination: <span className="font-bold text-[#F4EFE6]">Jebel Ali, UAE (AEJEA)</span> • Hub: <span className="text-[#E88B2A]">Mundra Gateway CFS</span>
         </div>
       </div>
 

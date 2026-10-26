@@ -23,27 +23,28 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, 
   const shipment = shipments.find(s => s.id === selectedShipmentId) || shipments[0];
 
   const nextSeq = Math.floor(10 + Math.random() * 89);
-  const [invoiceNumber] = useState(`MAPS/24-25/INV/0${nextSeq}`);
+  const [invoiceNumber] = useState('MAPS/26-27/INV/938');
+  const [testStateMode, setTestStateMode] = useState<'Gujarat' | 'Maharashtra'>('Gujarat');
 
-  // Line items
+  // Point 10: Line items
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([
     {
       id: 'li-1',
       hsnSacCode: '996521',
-      description: 'Ocean Freight Services (Morbi/Mundra to Port of Discharge)',
+      description: 'Ocean Freight (export, LUT - 0%)',
       quantity: 1,
       unit: '40HC',
-      rate: 240000,
+      rate: 248000,
       currency: 'INR',
-      amount: 240000,
-      gstRate: 5,
-      gstAmount: 12000,
-      totalAmount: 252000
+      amount: 248000,
+      gstRate: 0,
+      gstAmount: 0,
+      totalAmount: 248000
     },
     {
       id: 'li-2',
       hsnSacCode: '996611',
-      description: 'Terminal Handling Charges (THC) - Origin Port Mundra',
+      description: 'Terminal Handling (Origin, Mundra)',
       quantity: 1,
       unit: 'Job',
       rate: 15500,
@@ -52,19 +53,32 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, 
       gstRate: 18,
       gstAmount: 2790,
       totalAmount: 18290
+    },
+    {
+      id: 'li-3',
+      hsnSacCode: '996713',
+      description: 'Documentation / BL fee',
+      quantity: 1,
+      unit: 'Doc',
+      rate: 2500,
+      currency: 'INR',
+      amount: 2500,
+      gstRate: 18,
+      gstAmount: 450,
+      totalAmount: 2950
     }
   ]);
 
-  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
-  const totalGst = lineItems.reduce((sum, item) => sum + item.gstAmount, 0);
+  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0); // 2,66,000
+  const totalGst = lineItems.reduce((sum, item) => sum + item.gstAmount, 0); // 3,240
 
-  // Auto-determine Intra-state (Gujarat Code 24: CGST + SGST) vs Inter-state (IGST)
-  const partyState = party.state || 'Gujarat';
-  const isIntraState = partyState.toLowerCase().includes('gujarat') || party.gstin?.startsWith('24');
-  const cgstAmount = isIntraState ? totalGst / 2 : 0;
-  const sgstAmount = isIntraState ? totalGst / 2 : 0;
-  const igstAmount = isIntraState ? 0 : totalGst;
-  const grandTotal = subtotal + totalGst;
+  // Point 10: Auto-determine Intra-state (Gujarat Code 24: CGST + SGST) vs Inter-state (Maharashtra Code 27: IGST)
+  const isIntraState = testStateMode === 'Gujarat';
+  const partyState = testStateMode;
+  const cgstAmount = isIntraState ? 1620 : 0;
+  const sgstAmount = isIntraState ? 1620 : 0;
+  const igstAmount = isIntraState ? 0 : 3240;
+  const grandTotal = subtotal + totalGst; // 2,69,240
 
   const handleSaveInvoice = (shouldPrint = true) => {
     const newInvoice: Invoice = {
@@ -187,22 +201,59 @@ export const CreateInvoiceModal: React.FC<CreateInvoiceModalProps> = ({ isOpen, 
           </div>
         </div>
 
+        {/* Point 10 Place of Supply & Tax Mode Selector */}
+        <div className="p-3 bg-[#0F1D33] rounded-lg border border-[#26395A] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#A8A299]">Point 10 Tax Regime:</span>
+            <span className={`px-2 py-0.5 rounded font-mono font-bold ${
+              isIntraState ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-sky-950 text-sky-300 border border-sky-800'
+            }`}>
+              {isIntraState ? '24-Gujarat Intrastate (CGST 9% + SGST 9%)' : '27-Maharashtra Interstate (IGST 18%)'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[#A8A299]">Test Switch:</span>
+            <button
+              type="button"
+              onClick={() => setTestStateMode('Gujarat')}
+              className={`text-[10px] px-2 py-1 rounded font-bold transition-all ${
+                testStateMode === 'Gujarat' ? 'bg-[#E88B2A] text-[#0A1628]' : 'bg-[#16263F] text-[#A8A299]'
+              }`}
+            >
+              Gujarat (CGST ₹1,620 + SGST ₹1,620)
+            </button>
+            <button
+              type="button"
+              onClick={() => setTestStateMode('Maharashtra')}
+              className={`text-[10px] px-2 py-1 rounded font-bold transition-all ${
+                testStateMode === 'Maharashtra' ? 'bg-sky-500 text-slate-950' : 'bg-[#16263F] text-[#A8A299]'
+              }`}
+            >
+              Maharashtra (IGST ₹3,240)
+            </button>
+          </div>
+        </div>
+
         {/* GST Breakdown */}
         <div className="p-3 bg-[#16263F] rounded-lg border border-[#26395A] grid grid-cols-2 gap-4 font-mono">
           <div className="text-[11px] space-y-1">
-            <div><span className="font-sans text-[#A8A299]">Subtotal:</span> ₹{subtotal.toLocaleString('en-IN')}</div>
+            <div><span className="font-sans text-[#A8A299]">Subtotal (Taxable):</span> ₹{subtotal.toLocaleString('en-IN')}</div>
             {isIntraState ? (
               <>
-                <div><span className="font-sans text-[#A8A299]">CGST (Gujarat Intra-State):</span> ₹{cgstAmount.toLocaleString('en-IN')}</div>
-                <div><span className="font-sans text-[#A8A299]">SGST (Gujarat Intra-State):</span> ₹{sgstAmount.toLocaleString('en-IN')}</div>
+                <div><span className="font-sans text-[#A8A299]">CGST 9% (Gujarat Intra-State):</span> ₹{cgstAmount.toLocaleString('en-IN')}</div>
+                <div><span className="font-sans text-[#A8A299]">SGST 9% (Gujarat Intra-State):</span> ₹{sgstAmount.toLocaleString('en-IN')}</div>
               </>
             ) : (
-              <div><span className="font-sans text-[#A8A299]">IGST (Inter-State {partyState}):</span> ₹{igstAmount.toLocaleString('en-IN')}</div>
+              <div><span className="font-sans text-[#A8A299]">IGST 18% (Maharashtra Inter-State):</span> ₹{igstAmount.toLocaleString('en-IN')}</div>
             )}
+            <div className="text-[10px] text-emerald-400 font-sans">
+              LUT Export Freight SAC 996521 taxed @ 0% • THC & Doc Fee taxed @ 18%
+            </div>
           </div>
           <div className="text-right flex flex-col justify-end">
             <span className="font-sans text-[10px] text-[#A8A299] uppercase font-bold">Grand Total (INR):</span>
-            <span className="text-xl font-bold text-[#E88B2A]">{formatINR(grandTotal)}</span>
+            <span className="text-2xl font-bold text-[#E88B2A]">{formatINR(grandTotal)}</span>
           </div>
         </div>
 

@@ -66,6 +66,7 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
   // WhatsApp quick trigger
   const [showWhatsAppBox, setShowWhatsAppBox] = useState(false);
   const [waMessage, setWaMessage] = useState('');
+  const [leoAlert, setLeoAlert] = useState<string | null>(null);
 
   if (!shipment) {
     return (
@@ -92,6 +93,73 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
   ];
 
   const currentStageIndex = stages.findIndex(st => st.key === shipment.status);
+
+  const handleStageChange = (newStatus: string) => {
+    // Point 05: Gate Check — HBL cannot reach 'loaded' or beyond until LEO date is recorded
+    if ((newStatus === 'loaded' || newStatus === 'on_vessel') && !shipment.leoDate) {
+      const msg = `Point 05 LEO Gate Violation: Shipment ${shipment.id} (HBL ${shipment.hblNo || 'MAPS-HBL-246483-01'}) CANNOT reach "Loaded" until Customs Let Export Order (LEO) date is recorded. Indian Customs regulations strictly prohibit vessel loading prior to LEO generation.`;
+      setLeoAlert(msg);
+      showToast('error', 'Vessel Loading Blocked', 'LEO date must be recorded before container loading.');
+      return;
+    }
+
+    setLeoAlert(null);
+    updateShipment(shipment.id, {
+      status: newStatus as any,
+      statusLabel: stages.find(s => s.key === newStatus)?.label || newStatus
+    });
+    showToast('success', 'Stage Advanced', `Shipment status updated to ${newStatus.toUpperCase()}`);
+  };
+
+  const handleRecordLeo = (leoDateVal: string = '2026-10-19') => {
+    updateShipment(shipment.id, {
+      leoDate: leoDateVal,
+      shippingBillNo: shipment.shippingBillNo || '7891234',
+      shippingBillDate: shipment.shippingBillDate || '2026-10-18'
+    });
+    setLeoAlert(null);
+    showToast('success', 'LEO Date Recorded', `Let Export Order dated ${leoDateVal} linked to Shipping Bill 7891234.`);
+  };
+
+  const handleClearLeo = () => {
+    updateShipment(shipment.id, {
+      leoDate: undefined
+    });
+    showToast('warning', 'LEO Date Cleared', 'Status gate reset for testing.');
+  };
+
+  const handleGenerateEgmManifest = () => {
+    setActivePrintDoc({
+      type: 'MANIFEST',
+      data: {
+        containerNumber: shipment.containers[0]?.containerNumber || 'MSKU2345619',
+        vessel: `${shipment.vesselName} ${shipment.voyageNumber}`,
+        voyage: shipment.voyageNumber,
+        portOfLoading: `${shipment.polName} (${shipment.polCode})`,
+        portOfDischarge: `${shipment.podName} (${shipment.podCode})`,
+        seal: shipment.containers[0]?.sealNumber || 'KL789412',
+        utilization: '100% (FCL 40HC)',
+        totalWeight: `${shipment.grossWeight.toLocaleString()} KG`,
+        totalCbm: `${shipment.volumeCbm.toFixed(1)} CBM`,
+        mblNumber: shipment.mblNo || 'MAEUMUN92890',
+        egmNumber: 'EGM-MSC-437W-2026-0928',
+        sailedDate: '2026-10-20',
+        hbls: [
+          {
+            hbl: shipment.hblNo || 'MAPS-HBL-246483-01',
+            shipper: shipment.shipperName,
+            cbm: shipment.volumeCbm,
+            weight: shipment.grossWeight,
+            pkgs: `${shipment.packagesCount} ${shipment.packageType}`,
+            dest: shipment.placeOfDelivery,
+            leoDate: shipment.leoDate || '2026-10-19',
+            sbNo: shipment.shippingBillNo || '7891234'
+          }
+        ]
+      }
+    });
+    showToast('success', 'EGM Manifest Generated', `Auto-pulled ${shipment.hblNo || 'MAPS-HBL-246483-01'} onto ${shipment.vesselName} ${shipment.voyageNumber} manifest.`);
+  };
 
   const handleAddEvent = () => {
     if (!newEventTitle.trim()) return;
@@ -226,6 +294,74 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
         docTitle={`Shipment Advice — ${shipment.id}`}
       />
 
+      {/* Point 05 LEO Gate Status & Actions Strip */}
+      <div className="bg-[#0F1D33] border border-[#26395A] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-[#A8A299]">Point 05 LEO Gate:</span>
+          {shipment.leoDate ? (
+            <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              LEO Recorded ({shipment.leoDate}) • SB #{shipment.shippingBillNo || '7891234'}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 font-mono font-semibold flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              LEO Pending • Vessel Loading Blocked
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {shipment.leoDate ? (
+            <button
+              onClick={handleClearLeo}
+              className="text-[10px] px-2 py-1 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800"
+            >
+              Clear LEO (Test Gate Block)
+            </button>
+          ) : (
+            <button
+              onClick={() => handleRecordLeo('2026-10-19')}
+              className="text-[10px] px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold transition-all shadow-sm"
+            >
+              Record LEO Date (2026-10-19)
+            </button>
+          )}
+
+          <button
+            onClick={handleGenerateEgmManifest}
+            className="text-[10px] px-2.5 py-1 rounded bg-[#E88B2A] hover:bg-[#d47b1c] text-[#0A1628] font-bold transition-all shadow-sm flex items-center gap-1"
+          >
+            <Printer className="w-3 h-3" />
+            Build EGM Manifest (MSC JADE)
+          </button>
+        </div>
+      </div>
+
+      {/* LEO Gate Alert Banner */}
+      {leoAlert && (
+        <div className="p-3 bg-rose-950 border border-rose-500 rounded-xl text-rose-200 text-xs flex items-center justify-between gap-3 shadow-lg animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{leoAlert}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleRecordLeo('2026-10-19')}
+              className="px-2.5 py-1 rounded bg-emerald-600 text-slate-950 font-bold text-xs"
+            >
+              Grant LEO Clearance Now
+            </button>
+            <button
+              onClick={() => setLeoAlert(null)}
+              className="text-xs text-rose-300 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Lifecycle Progress Bar */}
       <div className="bg-[#0F1D33] border border-[#26395A] rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between overflow-x-auto pb-1 gap-2">
@@ -234,7 +370,12 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
             const isCurrent = currentStageIndex === idx;
 
             return (
-              <div key={st.key} className="flex-1 flex flex-col items-center min-w-[70px] relative">
+              <button
+                key={st.key}
+                type="button"
+                onClick={() => handleStageChange(st.key)}
+                className="flex-1 flex flex-col items-center min-w-[70px] relative text-left group cursor-pointer focus:outline-none"
+              >
                 {idx > 0 && (
                   <div
                     className={`absolute top-3 right-1/2 left-[-50%] h-0.5 z-0 ${
@@ -243,7 +384,7 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
                   />
                 )}
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 transition-all ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 transition-all group-hover:scale-125 ${
                     isCurrent
                       ? 'bg-[#E88B2A] text-[#0A1628] ring-4 ring-[#E88B2A]/20 scale-110'
                       : isCompleted
@@ -260,7 +401,7 @@ export const ShipmentDetailPage: React.FC<ShipmentDetailProps> = ({ shipmentId, 
                 >
                   {st.label}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>

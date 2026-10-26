@@ -20,16 +20,25 @@ export const QuoteBuilderPage: React.FC<QuoteBuilderProps> = ({ onBack }) => {
   const [equipmentType, setEquipmentType] = useState<any>("40'HC");
   const [carrierName, setCarrierName] = useState('MSC');
   const [baseFreightUSD, setBaseFreightUSD] = useState(2850);
-  const [surchargesUSD, setSurchargesUSD] = useState(200);
-  const [localChargesINR, setLocalChargesINR] = useState(18500);
-  const [marginINR, setMarginINR] = useState(25000);
+  const [bafUSD, setBafUSD] = useState(160);
+  const [cafUSD, setCafUSD] = useState(40);
+  const [localChargesINR, setLocalChargesINR] = useState(14200);
+  const [marginPercent, setMarginPercent] = useState(15);
+  const [discountPercent, setDiscountPercent] = useState(0);
   const [validUntil, setValidUntil] = useState('29 Oct 2026');
   const [paymentTerms, setPaymentTerms] = useState('15 Days Credit');
 
   const customer = parties.find(p => p.id === selectedCustomerId) || shippers[0];
 
-  const totalFreightINR = Math.round((baseFreightUSD + surchargesUSD) * 84.2);
-  const grandTotalQuoteINR = totalFreightINR + localChargesINR + marginINR;
+  // Point 09: Landed buy = base + BAF + CAF
+  const landedBuyUSD = baseFreightUSD + bafUSD + cafUSD;
+  const landedBuyINR = Math.round(landedBuyUSD * 83.92);
+  const standardMarginINR = Math.round(landedBuyINR * (marginPercent / 100));
+  const discountAmountINR = Math.round((landedBuyINR + standardMarginINR) * (discountPercent / 100));
+  const grandTotalQuoteINR = landedBuyINR + localChargesINR + standardMarginINR - discountAmountINR;
+
+  // Point 09: 22% discount trips approval rule (>20%)
+  const isApprovalRequired = discountPercent > 20;
 
   const handleSaveAndPrint = (shouldPrint = true) => {
     const nextSeq = Math.floor(100 + Math.random() * 900);
@@ -47,9 +56,9 @@ export const QuoteBuilderPage: React.FC<QuoteBuilderProps> = ({ onBack }) => {
       equipmentType,
       carrierName,
       baseFreightUSD,
-      surchargesUSD,
+      surchargesUSD: (bafUSD + cafUSD),
       localChargesINR,
-      marginINR,
+      marginINR: standardMarginINR,
       totalPriceINR: grandTotalQuoteINR,
       validUntil,
       status: 'Sent',
@@ -174,25 +183,37 @@ export const QuoteBuilderPage: React.FC<QuoteBuilderProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* Step 3: Carrier & Margin */}
+        {/* Step 3: Carrier & Margin (Point 09) */}
         {step === 3 && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-[#A8A299] mb-1 font-semibold">Carrier</label>
                 <select
                   value={carrierName}
-                  onChange={e => setCarrierName(e.target.value)}
+                  onChange={e => {
+                    const c = e.target.value;
+                    setCarrierName(c);
+                    if (c === 'Maersk Line') {
+                      setBaseFreightUSD(2750); setBafUSD(180); setCafUSD(45); setLocalChargesINR(14500);
+                    } else if (c === 'MSC') {
+                      setBaseFreightUSD(2850); setBafUSD(160); setCafUSD(40); setLocalChargesINR(14200);
+                    } else if (c === 'CMA CGM') {
+                      setBaseFreightUSD(2900); setBafUSD(175); setCafUSD(50); setLocalChargesINR(14800);
+                    } else if (c === 'ONE') {
+                      setBaseFreightUSD(2650); setBafUSD(190); setCafUSD(45); setLocalChargesINR(14400);
+                    }
+                  }}
                   className="w-full bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6]"
                 >
-                  <option value="MSC">MSC</option>
-                  <option value="Maersk Line">Maersk Line</option>
-                  <option value="CMA CGM">CMA CGM</option>
-                  <option value="ONE">ONE</option>
+                  <option value="MSC">MSC ($2,850 + BAF 160 + CAF 40)</option>
+                  <option value="Maersk Line">Maersk ($2,750 + BAF 180 + CAF 45)</option>
+                  <option value="CMA CGM">CMA CGM ($2,900 + BAF 175 + CAF 50)</option>
+                  <option value="ONE">ONE ($2,650 + BAF 190 + CAF 45)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[#A8A299] mb-1 font-semibold">Base Freight (USD)</label>
+                <label className="block text-[#A8A299] mb-1 font-semibold">Base Buy (USD)</label>
                 <input
                   type="number"
                   value={baseFreightUSD}
@@ -201,32 +222,105 @@ export const QuoteBuilderPage: React.FC<QuoteBuilderProps> = ({ onBack }) => {
                 />
               </div>
               <div>
-                <label className="block text-[#A8A299] mb-1 font-semibold">Surcharges (USD)</label>
-                <input
-                  type="number"
-                  value={surchargesUSD}
-                  onChange={e => setSurchargesUSD(Number(e.target.value))}
-                  className="w-full bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6] font-mono"
-                />
+                <label className="block text-[#A8A299] mb-1 font-semibold">BAF / CAF (USD)</label>
+                <div className="flex gap-1">
+                  <input
+                    type="number"
+                    value={bafUSD}
+                    onChange={e => setBafUSD(Number(e.target.value))}
+                    className="w-1/2 bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6] font-mono"
+                    placeholder="BAF"
+                  />
+                  <input
+                    type="number"
+                    value={cafUSD}
+                    onChange={e => setCafUSD(Number(e.target.value))}
+                    className="w-1/2 bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6] font-mono"
+                    placeholder="CAF"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-[#A8A299] mb-1 font-semibold">Our Margin (INR)</label>
+                <label className="block text-[#A8A299] mb-1 font-semibold">Origin THC (INR)</label>
                 <input
                   type="number"
-                  value={marginINR}
-                  onChange={e => setMarginINR(Number(e.target.value))}
-                  className="w-full bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6] font-mono text-emerald-400 font-bold"
+                  value={localChargesINR}
+                  onChange={e => setLocalChargesINR(Number(e.target.value))}
+                  className="w-full bg-[#16263F] border border-[#26395A] rounded p-2 text-[#F4EFE6] font-mono"
                 />
               </div>
             </div>
 
+            {/* Landed Buy Summary Strip */}
+            <div className="p-3 bg-[#0F1D33] rounded-lg border border-[#26395A] flex flex-wrap justify-between items-center text-xs">
+              <div>
+                <span className="text-[#A8A299]">Landed Buy Cost (Base + BAF + CAF): </span>
+                <span className="font-bold font-mono text-[#F4EFE6]">${landedBuyUSD} (₹{landedBuyINR.toLocaleString('en-IN')})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[#A8A299]">Margin %:</span>
+                <input
+                  type="number"
+                  value={marginPercent}
+                  onChange={e => setMarginPercent(Number(e.target.value))}
+                  className="w-16 bg-[#16263F] border border-[#26395A] rounded px-2 py-1 font-mono text-emerald-400 font-bold"
+                />
+                <span className="text-[#A8A299]">Discount %:</span>
+                <input
+                  type="number"
+                  value={discountPercent}
+                  onChange={e => setDiscountPercent(Number(e.target.value))}
+                  className={`w-16 bg-[#16263F] border rounded px-2 py-1 font-mono font-bold ${
+                    isApprovalRequired ? 'border-rose-500 text-rose-400' : 'border-[#26395A] text-amber-400'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Quick Test Scenarios for Point 09 */}
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="text-[#A8A299] font-semibold">Test Point 09:</span>
+              <button
+                type="button"
+                onClick={() => { setMarginPercent(15); setDiscountPercent(0); }}
+                className="px-2 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-semibold"
+              >
+                Standard 15% Margin
+              </button>
+              <button
+                type="button"
+                onClick={() => { setDiscountPercent(22); }}
+                className="px-2 py-1 rounded bg-rose-950 text-rose-300 border border-rose-800 font-semibold"
+              >
+                22% Discount (Trips Approval Gate)
+              </button>
+            </div>
+
+            {/* Approval Warning Banner */}
+            {isApprovalRequired && (
+              <div className="p-3 bg-rose-950/90 border border-rose-500 rounded-lg text-rose-200 text-xs flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">⚠️</span>
+                  <div>
+                    <span className="font-bold block">Commercial Director Sign-Off Required</span>
+                    <span className="text-[11px] text-rose-300">
+                      {discountPercent}% discount exceeds standard commercial limits (&gt;20%). System will hold quotation in "Pending Approval" state.
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-1 rounded bg-rose-900 border border-rose-600 font-mono font-bold uppercase">
+                  APPROVAL TRIP
+                </span>
+              </div>
+            )}
+
             <div className="p-3 bg-[#16263F] rounded-lg border border-[#26395A] flex justify-between items-center font-mono">
               <div>
-                <span className="text-[#A8A299] font-sans">Total Ocean (INR @ 84.2): </span>
-                <span className="font-bold text-[#F4EFE6]">{formatINR(totalFreightINR)}</span>
+                <span className="text-[#A8A299] font-sans">Margin Earned: </span>
+                <span className="font-bold text-emerald-400">{formatINR(standardMarginINR - discountAmountINR)}</span>
               </div>
               <div>
-                <span className="text-[#A8A299] font-sans">Grand Quote Total: </span>
+                <span className="text-[#A8A299] font-sans">Final Quote Total: </span>
                 <span className="font-bold text-xl text-[#E88B2A]">{formatINR(grandTotalQuoteINR)}</span>
               </div>
             </div>

@@ -67,85 +67,31 @@ export function numberToWordsINR(num: number): string {
   return str.trim() + ' Rupees Only';
 }
 
-/**
- * ISO 6346 Container Number Validation
- * 4 letters (first 3 owner, 4th equipment category 'U', 'J', 'Z') + 6 digits serial + 1 check digit
- */
-export function validateISO6346(containerNo: string): { 
-  isValid: boolean; 
-  expectedCheckDigit?: number; 
-  message: string;
-  ownerCode?: string;
-  equipmentCategory?: string;
-  serialNumber?: string;
-  checkDigit?: number;
-} {
-  const clean = containerNo.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (clean.length !== 11) {
-    return { isValid: false, message: 'Must be exactly 11 characters (e.g. MSKU2345678)' };
-  }
+export {
+  calculateGSTINCheckDigit,
+  validateGSTIN,
+  validatePAN,
+  validateIEC,
+  validateISO6346,
+  validateSealNo,
+  validateHSCode,
+  validateSACCode,
+  validateUNLOCODE,
+  validateIFSC,
+  validatePhoneIN,
+  validateEmail,
+  validateVesselIMO,
+  validateVoyageNo,
+  validateUNNumber,
+  validateIMDGClass,
+  validateContainerType,
+  validateVGM,
+  validateCBM,
+  validateCurrency,
+  formatDateToDisplay,
+  formatDateToISO
+} from './validators';
 
-  const ownerCode = clean.slice(0, 3);
-  const equipmentCategory = clean[3];
-  const serialNumber = clean.slice(4, 10);
-  const actualCheck = parseInt(clean[10], 10);
-
-  const charValues: Record<string, number> = {
-    A: 10, B: 12, C: 13, D: 14, E: 15, F: 16, G: 17, H: 18, I: 19, J: 20,
-    K: 21, L: 23, M: 24, N: 25, O: 26, P: 27, Q: 28, R: 29, S: 30, T: 31,
-    U: 32, V: 34, W: 35, X: 36, Y: 37, Z: 38
-  };
-
-  let sum = 0;
-  for (let i = 0; i < 10; i++) {
-    const char = clean[i];
-    let val = 0;
-    if (char >= '0' && char <= '9') {
-      val = parseInt(char, 10);
-    } else if (charValues[char]) {
-      val = charValues[char];
-    } else {
-      return { 
-        isValid: false, 
-        message: 'Invalid characters in container number',
-        ownerCode,
-        equipmentCategory,
-        serialNumber,
-        checkDigit: actualCheck
-      };
-    }
-    sum += val * Math.pow(2, i);
-  }
-
-  let calculatedCheck = sum % 11;
-  if (calculatedCheck === 10) calculatedCheck = 0;
-
-  if (calculatedCheck === actualCheck) {
-    return { 
-      isValid: true, 
-      message: 'Valid ISO 6346 Container Number',
-      ownerCode,
-      equipmentCategory,
-      serialNumber,
-      checkDigit: actualCheck
-    };
-  } else {
-    return { 
-      isValid: false, 
-      expectedCheckDigit: calculatedCheck, 
-      message: `Check digit mismatch (Expected ${calculatedCheck}, found ${actualCheck})`,
-      ownerCode,
-      equipmentCategory,
-      serialNumber,
-      checkDigit: actualCheck
-    };
-  }
-}
-
-export function validateGSTIN(gstin: string): boolean {
-  const regex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-  return regex.test(gstin.trim().toUpperCase());
-}
 
 export function getShipmentStatusBadge(status: ShipmentStatus): {
   bg: string;

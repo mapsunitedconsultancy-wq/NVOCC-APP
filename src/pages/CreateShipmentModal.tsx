@@ -3,8 +3,8 @@ import { useApp } from '../context/AppContext';
 import { Modal } from '../components/common/Modal';
 import { Shipment, ContainerItem } from '../types';
 import { MOCK_PORTS, MOCK_EQUIPMENTS, MOCK_HS_CODES } from '../data/mockData';
-import { validateISO6346 } from '../utils/formatters';
-import { Ship, Check, AlertCircle, Plus, Trash2, ArrowRight, ArrowLeft, Scan } from 'lucide-react';
+import { validateISO6346, validateHSCode, validateVGM } from '../utils/validators';
+import { Ship, Check, AlertCircle, Plus, Trash2, ArrowRight, ArrowLeft, Scan, ShieldAlert } from 'lucide-react';
 import { BarcodeScannerModal } from '../components/common/BarcodeScannerModal';
 
 interface CreateShipmentModalProps {
@@ -16,14 +16,15 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
   const { addShipment, parties, currentUser, showToast } = useApp();
 
   const [step, setStep] = useState(1);
+  const [stepError, setStepError] = useState<string | null>(null);
 
   // Step 1: Basic Info
   const [jobType, setJobType] = useState<'Export' | 'Import' | 'Cross-trade'>('Export');
   const [mode, setMode] = useState<'Ocean' | 'Air'>('Ocean');
   const [serviceType, setServiceType] = useState<'FCL' | 'LCL' | 'Breakbulk'>('FCL');
   const [incoterm, setIncoterm] = useState<'FOB' | 'CIF' | 'EXW' | 'DDP'>('CIF');
-  const [referenceNo, setReferenceNo] = useState('');
-  const [bookingNo, setBookingNo] = useState('');
+  const [referenceNo, setReferenceNo] = useState('PO-9289');
+  const [bookingNo, setBookingNo] = useState('MAEU-BKG-249289');
 
   // Step 2: Parties
   const shippers = parties.filter(p => p.type === 'Shipper');
@@ -43,7 +44,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
   // Step 4: Cargo & Containers
   const [cargoDesc, setCargoDesc] = useState('Vitrified Ceramic Floor Tiles');
   const [hsCode, setHsCode] = useState('69089090');
-  const [packagesCount, setPackagesCount] = useState(1100);
+  const [packagesCount, setPackagesCount] = useState(1180);
   const [packageType, setPackageType] = useState('Bags on Pallets');
   const [grossWeight, setGrossWeight] = useState(25480);
   const [volumeCbm, setVolumeCbm] = useState(67.0);
@@ -51,7 +52,7 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
   const [unNumber, setUnNumber] = useState('');
 
   // Container
-  const [containerNumber, setContainerNumber] = useState('MSKU2345678');
+  const [containerNumber, setContainerNumber] = useState('MSKU2345619');
   const [equipmentType, setEquipmentType] = useState<any>("40'HC");
   const [sealNumber, setSealNumber] = useState('KL789412');
 
@@ -72,6 +73,10 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
 
   // Validation
   const containerCheck = validateISO6346(containerNumber);
+  const hsCheck = validateHSCode(hsCode);
+  const tareWeight = equipmentType.includes('40') ? 3880 : 2280;
+  const vgmWeight = grossWeight;
+  const vgmCheck = validateVGM(vgmWeight, tareWeight);
 
   const handleSave = () => {
     const nextSeq = Math.floor(1000 + Math.random() * 9000);
@@ -194,6 +199,28 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
     onClose();
   };
 
+  const handleNextStep = () => {
+    if (step === 4) {
+      if (!containerCheck.isValid) {
+        setStepError(containerCheck.message || 'Wrong container check digit (must pass ISO 6346 validation).');
+        showToast('error', 'Validation Blocked', containerCheck.message || 'Invalid container number check digit');
+        return;
+      }
+      if (!hsCheck.isValid) {
+        setStepError(hsCheck.message || 'HS code must be 8 digits');
+        showToast('error', 'Validation Blocked', 'HS code must be 8 digits (ITC-HS format)');
+        return;
+      }
+      if (!vgmCheck.isValid) {
+        setStepError(vgmCheck.message || 'VGM weight must be greater than container tare weight');
+        showToast('error', 'Validation Blocked', vgmCheck.message || 'VGM weight must exceed container tare weight');
+        return;
+      }
+    }
+    setStepError(null);
+    setStep(step + 1);
+  };
+
   return (
     <>
       <Modal
@@ -203,6 +230,22 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
         subtitle="7-step wizard with ISO 6346 validation, ITC-HS code search, and instant HBL drafting"
         maxWidth="4xl"
       >
+      {/* Inline Step Error Banner */}
+      {stepError && (
+        <div className="p-3 mb-4 bg-rose-950/80 border border-rose-500 rounded-lg text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="font-semibold">{stepError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStepError(null)}
+            className="text-xs text-rose-300 hover:text-white underline font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Wizard Steps Stepper */}
       <div className="flex items-center justify-between pb-4 border-b border-[#1C2D4A] mb-5 overflow-x-auto text-xs">
         {[
@@ -520,23 +563,48 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
                       <Scan className="w-3 h-3" /> Scan EIR
                     </button>
                   </div>
-                  <input
+                    <input
                     type="text"
                     value={containerNumber}
-                    onChange={e => setContainerNumber(e.target.value.toUpperCase())}
-                    placeholder="e.g. MSKU2345678"
-                    className="w-full bg-[#0F1D33] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono focus:border-[#E88B2A]"
+                    onChange={e => {
+                      setContainerNumber(e.target.value.toUpperCase());
+                      setStepError(null);
+                    }}
+                    placeholder="e.g. MSKU2345619"
+                    className={`w-full bg-[#0F1D33] border rounded-lg p-2 text-[#F4EFE6] font-mono ${
+                      containerCheck.isValid ? 'border-emerald-500/80 focus:border-emerald-400' : 'border-rose-500 focus:border-rose-400'
+                    }`}
                   />
-                  <div className="mt-1 flex items-center gap-1 text-[10px]">
+                  <div className="mt-1 flex flex-col gap-1 text-[10px]">
                     {containerCheck.isValid ? (
                       <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                        <Check className="w-3 h-3" /> Valid ISO 6346 Container Number
+                        <Check className="w-3 h-3" /> Valid ISO 6346 (Check digit: {containerCheck.checkDigit})
                       </span>
                     ) : (
-                      <span className="text-amber-400 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> {containerCheck.message}
+                      <span className="text-rose-400 flex items-center gap-1 font-semibold bg-rose-950/60 p-1.5 rounded border border-rose-800">
+                        <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                        {containerCheck.message}
                       </span>
                     )}
+
+                    {/* Quick Test Data Toggle for Testing Pack */}
+                    <div className="flex items-center gap-2 pt-1 font-sans">
+                      <span className="text-[10px] text-[#A8A299]">Test Pack:</span>
+                      <button
+                        type="button"
+                        onClick={() => { setContainerNumber('MSKU2345619'); setStepError(null); }}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 hover:bg-emerald-900"
+                      >
+                        Valid (MSKU2345619)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setContainerNumber('MSKU2345610'); setStepError(null); }}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700 hover:bg-rose-900"
+                      >
+                        Invalid Checksum (MSKU2345610)
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -704,7 +772,8 @@ export const CreateShipmentModal: React.FC<CreateShipmentModalProps> = ({ isOpen
 
         {step < 7 ? (
           <button
-            onClick={() => setStep(step + 1)}
+            type="button"
+            onClick={handleNextStep}
             className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-[#E88B2A] hover:bg-[#d67b1c] text-[#0A1628] transition-all"
           >
             Continue <ArrowRight className="w-3.5 h-3.5" />

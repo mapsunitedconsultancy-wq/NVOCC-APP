@@ -58,8 +58,8 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
   const [step, setStep] = useState(1);
   const [selectedShipmentId, setSelectedShipmentId] = useState(initialShipment?.id || '');
 
-  // DO Header Particulars
-  const [doNumber, setDoNumber] = useState(`LANDOMUN${Math.floor(3600000 + Math.random() * 90000)}`);
+  // DO Header Particulars - Point 06 Golden Import Defaults
+  const [doNumber, setDoNumber] = useState('LANDOMUN3632026');
   const [doDate, setDoDate] = useState('15-10-2026');
   const [blNumber, setBlNumber] = useState(initialShipment?.hblNo || initialShipment?.mblNo || 'LCSOHMUNSOH2600163');
   const [blDate, setBlDate] = useState('02-09-2026');
@@ -94,15 +94,17 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
     sealNumber: string;
     sizeType: string;
     doValidTill: string;
+    selectedForDO?: boolean;
   }>>([
     {
-      containerNumber: initialShipment?.containers[0]?.containerNumber || 'FCIU2316385',
-      sealNumber: initialShipment?.containers[0]?.sealNumber || '1132934',
-      sizeType: initialShipment?.containers[0]?.equipmentType || '20GP',
-      doValidTill: '25-10-2026'
+      containerNumber: 'MSCU6678413',
+      sealNumber: 'MSK-789013',
+      sizeType: '40HC',
+      doValidTill: '25-10-2026',
+      selectedForDO: true
     }
   ]);
-  const [totalContainersSummary, setTotalContainersSummary] = useState("01X20'");
+  const [totalContainersSummary, setTotalContainersSummary] = useState("01X40'HC");
 
   // Empty Return Depot
   const [emptyReturnDepot, setEmptyReturnDepot] = useState('KDPP TERMINALS');
@@ -112,9 +114,11 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
   const [emptyReturnContact, setEmptyReturnContact] = useState('8488006739');
   const [emptyReturnEmail, setEmptyReturnEmail] = useState('docs.mundra@kdppcontainer.com');
 
-  // Status & Financials
+  // Compliance Gates (Point 06)
+  const [hblSurrenderStatus, setHblSurrenderStatus] = useState<'Pending' | 'Telex Released' | 'Original Surrendered'>('Pending');
   const [securityDepositINR, setSecurityDepositINR] = useState(25000);
-  const [paymentCleared, setPaymentCleared] = useState(true);
+  const [paymentCleared, setPaymentCleared] = useState(false);
+  const [gateBlockReason, setGateBlockReason] = useState<string | null>(null);
 
   // Sync when shipment is selected
   const handleSelectShipment = (shipmentId: string) => {
@@ -195,12 +199,28 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
   };
 
   const handleIssueDO = () => {
+    // Point 06 DO Compliance Gate 1: HBL Surrender Check
+    if (hblSurrenderStatus === 'Pending') {
+      const err = `DO Gate Violation: House Bill of Lading ${blNumber} has NOT been surrendered or telex-released. DO release is legally blocked to protect cargo title.`;
+      setGateBlockReason(err);
+      showToast('error', 'DO Blocked (Gate 1)', 'HBL must be surrendered or telex-released.');
+      return;
+    }
+
+    // Point 06 DO Compliance Gate 2: Freight & Local Charges Cleared
+    if (!paymentCleared) {
+      const err = 'DO Gate Violation: Ocean freight, THC, CFS charges, or mandatory container detention security deposit (₹25,000) have not been cleared by accounts.';
+      setGateBlockReason(err);
+      showToast('error', 'DO Blocked (Gate 2)', 'Local charges and deposit must be marked paid.');
+      return;
+    }
+
     const newDo: DeliveryOrderItem = {
       id: `do-${Date.now()}`,
       doNumber,
       doDate,
-      shipmentId: selectedShipmentId || 'MAPS-IMP-CUSTOM',
-      mblNumber: initialShipment?.mblNo || 'MSKUSOH2600891',
+      shipmentId: selectedShipmentId || 'MAPS-IMP-260163',
+      mblNumber: initialShipment?.mblNo || 'MSKUSOH2600091',
       blNumber,
       blDate,
       vesselVoyage,
@@ -220,19 +240,19 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
       packageCount,
       totalGrossWt,
       containers,
-      totalContainersSummary: totalContainersSummary || `${String(containers.length).padStart(2, '0')}X20'`,
+      totalContainersSummary: totalContainersSummary || `${String(containers.length).padStart(2, '0')}X40'HC`,
       emptyReturnDepot,
       emptyReturnAddress,
       emptyReturnContact,
       emptyReturnEmail,
-      status: paymentCleared ? 'Issued' : 'Pending Charges',
+      status: 'Issued',
       validTillDate: containers[0]?.doValidTill || '25-10-2026',
-      paymentCleared,
+      paymentCleared: true,
       securityDepositINR
     };
 
     addDeliveryOrder(newDo);
-    showToast('success', `Delivery Order ${doNumber} Issued!`, 'Formatted according to official Lancer / APSEZ format.');
+    showToast('success', `Delivery Order ${doNumber} Issued!`, 'All gates verified (Telex Released + Charges Paid).');
     onClose();
     // Open immediately in PrintModal so user can download PDF
     setActivePrintDoc({ type: 'DO', data: newDo });
@@ -246,7 +266,101 @@ export const CreateDeliveryOrderModal: React.FC<CreateDeliveryOrderModalProps> =
       subtitle="Full Indian NVOCC Combined Transport Format — Mundra / Kandla Gateway"
       maxWidth="xl"
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
+        {/* DO Compliance Gates Banner (Point 06) */}
+        <div className="p-3 bg-[#0F1D33] border border-[#26395A] rounded-xl space-y-2 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-[#E88B2A] uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" /> Point 06 DO Release Compliance Gates
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setHblSurrenderStatus('Pending');
+                  setPaymentCleared(false);
+                  setGateBlockReason(null);
+                  showToast('info', 'Test State Set', 'Gates reset to PENDING (attempt DO issue to verify block).');
+                }}
+                className="text-[10px] px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900"
+              >
+                Reset to Blocked
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHblSurrenderStatus('Telex Released');
+                  setPaymentCleared(true);
+                  setGateBlockReason(null);
+                  showToast('success', 'Gates Cleared', 'HBL marked Telex-Released & charges marked Paid.');
+                }}
+                className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 hover:bg-emerald-900"
+              >
+                Pass All Gates
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            {/* Gate 1: HBL Surrender */}
+            <div className={`p-2 rounded-lg border flex items-center justify-between ${
+              hblSurrenderStatus !== 'Pending' ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-200' : 'bg-rose-950/40 border-rose-700/60 text-rose-200'
+            }`}>
+              <div>
+                <span className="font-bold text-[11px] block">Gate 1: HBL Surrender</span>
+                <span className="text-[10px] opacity-80">{hblSurrenderStatus === 'Pending' ? 'Original HBL not surrendered' : `Verified (${hblSurrenderStatus})`}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHblSurrenderStatus(hblSurrenderStatus === 'Pending' ? 'Telex Released' : 'Pending');
+                  setGateBlockReason(null);
+                }}
+                className={`text-[10px] px-2 py-1 rounded font-bold transition-colors ${
+                  hblSurrenderStatus !== 'Pending' ? 'bg-emerald-600 text-slate-950' : 'bg-rose-600 text-white'
+                }`}
+              >
+                {hblSurrenderStatus !== 'Pending' ? '✓ Released' : 'Mark Released'}
+              </button>
+            </div>
+
+            {/* Gate 2: Local Charges Clearance */}
+            <div className={`p-2 rounded-lg border flex items-center justify-between ${
+              paymentCleared ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-200' : 'bg-rose-950/40 border-rose-700/60 text-rose-200'
+            }`}>
+              <div>
+                <span className="font-bold text-[11px] block">Gate 2: Finance Clearance</span>
+                <span className="text-[10px] opacity-80">{paymentCleared ? 'Freight & ₹25k Deposit Cleared' : 'Invoices & Deposit unpaid'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentCleared(!paymentCleared);
+                  setGateBlockReason(null);
+                }}
+                className={`text-[10px] px-2 py-1 rounded font-bold transition-colors ${
+                  paymentCleared ? 'bg-emerald-600 text-slate-950' : 'bg-rose-600 text-white'
+                }`}
+              >
+                {paymentCleared ? '✓ Paid' : 'Mark Paid'}
+              </button>
+            </div>
+          </div>
+
+          {gateBlockReason && (
+            <div className="p-2.5 bg-rose-900/80 border border-rose-500 rounded-lg text-rose-100 text-xs flex items-center justify-between shadow-md">
+              <span className="font-medium">{gateBlockReason}</span>
+              <button
+                type="button"
+                onClick={() => setGateBlockReason(null)}
+                className="underline text-[10px] text-rose-200 ml-2 shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Step Indicator */}
         <div className="flex items-center justify-between border-b border-[#1C2D4A] pb-3">
           <div className="flex items-center gap-3">

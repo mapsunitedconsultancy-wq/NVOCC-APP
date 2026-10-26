@@ -743,6 +743,15 @@ export const UN_DATABASE_LOOKUP: UnReferenceItem[] = [
     ems: 'F-A, S-B'
   },
   {
+    unNumber: 'UN1830',
+    properShippingName: 'SULPHURIC ACID with more than 51% acid',
+    imdgClass: '8',
+    packingGroup: 'II',
+    marinePollutant: false,
+    segregationGroup: '1 - Strong Acids',
+    ems: 'F-A, S-B'
+  },
+  {
     unNumber: 'UN3077',
     properShippingName: 'ENVIRONMENTALLY HAZARDOUS SUBSTANCE, SOLID, N.O.S.',
     imdgClass: '9',
@@ -754,6 +763,30 @@ export const UN_DATABASE_LOOKUP: UnReferenceItem[] = [
 ];
 
 export const MOCK_DG_SHIPMENTS: DangerousGoodsItem[] = [
+  // ══════════════════════════════════════════════════════════════════════════
+  // GOLDEN DG SHIPMENT: Kutch Chemicals (Testing Pack Point 08)
+  // Container: TGHU4512070 | UN1263 PAINT Class 3 PG III Flashpoint 23°C
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'dg-gold-1',
+    shipmentId: 'MAPS-EXP-240398',
+    hblNumber: 'MAPS-HBL-240398-01',
+    unNumber: 'UN1263',
+    properShippingName: 'PAINT (flammable liquid)',
+    imdgClass: '3',
+    packingGroup: 'III',
+    flashPoint: '23°C c.c.',
+    marinePollutant: false,
+    segregationGroup: 'None',
+    emsNumber: 'F-E, S-E',
+    status: 'DGD Submitted',
+    carrierApprovalRef: '', // Pending carrier approval gate test
+    netQuantityKg: 18000,
+    grossWeightKg: 19800,
+    packageType: '80 STEEL DRUMS 220L',
+    emergencyContact: 'Chemtrec / Dr. K. Mehta (+91 98250 99911)',
+    consigneeNotice: 'Flammable liquid class 3 PG III. Carrier approval required before loading.'
+  },
   {
     id: 'dg-001',
     shipmentId: 'MAPS-EXP-240391',

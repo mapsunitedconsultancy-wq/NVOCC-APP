@@ -164,8 +164,15 @@ export interface Shipment {
   isHazardous: boolean;
   unNumber?: string;
   dgClass?: string;
+  carrierApprovalRef?: string;
   isTempControlled: boolean;
   targetTemp?: string;
+
+  // Indian Customs & Gate Compliance (Testing Pack)
+  shippingBillNo?: string;
+  shippingBillDate?: string;
+  leoDate?: string; // Let Export Order date (mandatory gate for loaded status)
+  egmNo?: string;
 
   // Containers
   containers: ContainerItem[];

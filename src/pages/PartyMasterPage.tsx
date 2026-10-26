@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Party } from '../types';
-import { Users, Plus, Star, Search, ShieldCheck, Mail, Phone, MapPin, Building2, CreditCard } from 'lucide-react';
+import { Users, Plus, Star, Search, ShieldCheck, Mail, Phone, MapPin, Building2, CreditCard, ShieldAlert, Check } from 'lucide-react';
 import { formatINR } from '../utils/formatters';
+import { validateGSTIN, validatePAN, validateIEC } from '../utils/validators';
 import { Modal } from '../components/common/Modal';
 
 export const PartyMasterPage: React.FC = () => {
@@ -13,14 +14,18 @@ export const PartyMasterPage: React.FC = () => {
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
 
   const [showAddParty, setShowAddParty] = useState(false);
-  const [newName, setNewName] = useState('');
+  const [newName, setNewName] = useState('Krishna Ceramics');
   const [newType, setNewType] = useState<any>('Shipper');
   const [newCity, setNewCity] = useState('Morbi');
-  const [newGstin, setNewGstin] = useState('24AABCK9901D1Z1');
-  const [newPan, setNewPan] = useState('AABCK9901D');
-  const [newIec, setNewIec] = useState('2408019922');
-  const [newEmail, setNewEmail] = useState('ops@exportpartner.com');
-  const [newPhone, setNewPhone] = useState('+91 98250 88990');
+  const [newGstin, setNewGstin] = useState('24AAKCK4521P1Z7');
+  const [newPan, setNewPan] = useState('AAKCK4521P');
+  const [newIec, setNewIec] = useState('AAKCK4521P');
+  const [newEmail, setNewEmail] = useState('export@krishnaceramics.in');
+  const [newPhone, setNewPhone] = useState('+919825012345');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const gstinCheck = validateGSTIN(newGstin);
+  const panCheck = validatePAN(newPan);
 
   const filteredParties = parties.filter(p => {
     const matchSearch =
@@ -34,13 +39,32 @@ export const PartyMasterPage: React.FC = () => {
   });
 
   const handleCreateParty = () => {
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      setFormError('Please enter party name.');
+      return;
+    }
+
+    const isDomestic = newType !== 'Consignee' && newType !== 'Overseas Agent';
+    if (isDomestic && newGstin) {
+      if (!gstinCheck.isValid) {
+        setFormError(gstinCheck.message || 'Invalid GSTIN check digit.');
+        showToast('error', 'GSTIN Validation Failed', gstinCheck.message || 'Invalid GSTIN check digit');
+        return;
+      }
+    }
+
+    if (newPan && !panCheck.isValid) {
+      setFormError(panCheck.message || 'Invalid PAN format.');
+      showToast('error', 'PAN Validation Failed', panCheck.message || 'Invalid PAN format');
+      return;
+    }
+
     const newP: Party = {
       id: 'party-' + Date.now(),
       name: newName,
       code: newName.substring(0, 4).toUpperCase() + '-' + newCity.toUpperCase(),
       type: newType,
-      country: newType === 'Consignee' || newType === 'Overseas Agent' ? 'Germany' : 'India',
+      country: isDomestic ? 'India' : 'Germany',
       city: newCity,
       state: 'Gujarat',
       address: `${newName} Industrial Complex, ${newCity}, Gujarat`,
@@ -59,7 +83,7 @@ export const PartyMasterPage: React.FC = () => {
     };
     addParty(newP);
     setShowAddParty(false);
-    setNewName('');
+    setFormError(null);
     showToast('success', 'Party Registered', `${newName} added to Party Master CRM.`);
   };
 
@@ -220,33 +244,109 @@ export const PartyMasterPage: React.FC = () => {
                 />
               </div>
             </div>
+            {/* Form Error Banner */}
+            {formError && (
+              <div className="p-2.5 bg-rose-950/80 border border-rose-500 rounded-lg text-rose-200 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="font-semibold">{formError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormError(null)}
+                  className="text-xs text-rose-300 hover:text-white underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[#A8A299] mb-1 font-semibold">GSTIN</label>
+                <label className="block text-[#A8A299] mb-1 font-semibold">GSTIN (15 Chars)</label>
                 <input
                   type="text"
                   value={newGstin}
-                  onChange={e => setNewGstin(e.target.value)}
-                  className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono"
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase();
+                    setNewGstin(val);
+                    if (val.length >= 12) {
+                      setNewPan(val.substring(2, 12));
+                    }
+                    setFormError(null);
+                  }}
+                  className={`w-full bg-[#16263F] border rounded-lg p-2 text-[#F4EFE6] font-mono ${
+                    gstinCheck.isValid ? 'border-emerald-500/80' : 'border-rose-500'
+                  }`}
                 />
+                <div className="mt-1 flex flex-col gap-1 text-[10px]">
+                  {gstinCheck.isValid ? (
+                    <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                      <Check className="w-3 h-3" /> Valid GSTIN (State: {gstinCheck.stateCode || '24'}, Check: {gstinCheck.expectedCheckDigit || 'OK'})
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 flex items-center gap-1 font-semibold bg-rose-950/60 p-1 rounded border border-rose-800">
+                      <ShieldAlert className="w-3 h-3 shrink-0" />
+                      {gstinCheck.message}
+                    </span>
+                  )}
+
+                  {/* Testing Pack Quick Loaders */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <span className="text-[9px] text-[#A8A299]">Test:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewGstin('24AAKCK4521P1Z7');
+                        setNewPan('AAKCK4521P');
+                        setNewIec('AAKCK4521P');
+                        setNewName('Krishna Ceramics');
+                        setFormError(null);
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 hover:bg-emerald-900"
+                    >
+                      Valid (24AAKCK4521P1Z7)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewGstin('24AAKCK4521P1Z8');
+                        setFormError(null);
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700 hover:bg-rose-900"
+                    >
+                      Bad Checksum (...1Z8)
+                    </button>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-[#A8A299] mb-1 font-semibold">Income Tax PAN</label>
                 <input
                   type="text"
                   value={newPan}
-                  onChange={e => setNewPan(e.target.value)}
-                  placeholder="e.g. AABCK9901D"
-                  className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono uppercase"
+                  onChange={e => {
+                    setNewPan(e.target.value.toUpperCase());
+                    setFormError(null);
+                  }}
+                  placeholder="e.g. AAKCK4521P"
+                  className={`w-full bg-[#16263F] border rounded-lg p-2 text-[#F4EFE6] font-mono uppercase ${
+                    panCheck.isValid ? 'border-[#26395A]' : 'border-rose-500'
+                  }`}
                 />
+                <div className="mt-1 text-[10px]">
+                  {panCheck.isValid && panCheck.entityType && (
+                    <span className="text-emerald-400 font-semibold">{panCheck.entityType} Entity</span>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-[#A8A299] mb-1 font-semibold">DGFT IEC Code</label>
                 <input
                   type="text"
                   value={newIec}
-                  onChange={e => setNewIec(e.target.value)}
-                  placeholder="10-digit IEC"
+                  onChange={e => setNewIec(e.target.value.toUpperCase())}
+                  placeholder="10-digit PAN/IEC"
                   className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono"
                 />
               </div>

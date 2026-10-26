@@ -63,14 +63,19 @@ export const DangerousGoodsPage: React.FC = () => {
   };
 
   const handleRunSegregation = () => {
-    // Check known incompatibilities
+    // Check known incompatibilities per IMDG Code 7.2.4 Segregation Table
     if (
+      (itemA === 'UN1263' && itemB === 'UN1830') ||
+      (itemA === 'UN1830' && itemB === 'UN1263')
+    ) {
+      setSegregationResult('INCOMPATIBLE CONFLICT (IMDG 7.2.4 Table 1): Class 3 Flammable Liquid (UN1263 PAINT) and Class 8 Corrosive Strong Acid (UN1830 SULPHURIC ACID) MUST NOT be co-loaded in the same Cargo Transport Unit (CTU / Container). Segregation code 2: "Separated from" required. Risk of severe exothermic reaction, toxic fumes, and fire.');
+    } else if (
       (itemA === 'UN1789' && itemB === 'UN1824') ||
       (itemA === 'UN1824' && itemB === 'UN1789')
     ) {
       setSegregationResult('INCOMPATIBLE: Class 8 Strong Acid (UN1789) and Class 8 Strong Alkali (UN1824) must NOT be packed in the same container. Segregation code: "Separated from" (2 compartment separation or separate CTUs required).');
-    } else if (itemA === 'UN1230' && itemB === 'UN1789') {
-      setSegregationResult('CAUTION: Class 3 Flammable Liquid (UN1230) and Class 8 Corrosive Acid (UN1789) require "Away from" segregation. Must be stowed in distinct pallet rows.');
+    } else if (itemA === 'UN1230' && (itemB === 'UN1789' || itemB === 'UN1830')) {
+      setSegregationResult('CAUTION / INCOMPATIBLE: Class 3 Flammable Liquid (UN1230 METHANOL) and Class 8 Strong Acid require strict segregation. Dangerous goods reaction hazard in enclosed space.');
     } else {
       setSegregationResult('COMPATIBLE: Both items may be co-loaded in the same container under general IMDG Code segregation provisions.');
     }
@@ -287,7 +292,54 @@ export const DangerousGoodsPage: React.FC = () => {
                       )}
                     </td>
 
-                    <td className="p-3.5 text-right">
+                    <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                      <button
+                        onClick={() => {
+                          if (!item.carrierApprovalRef) {
+                            showToast(
+                              'error',
+                              'Loading Gate Blocked!',
+                              `Carrier approval reference missing for ${item.unNumber}. Cargo cannot be loaded onto vessel until approval reference is recorded.`
+                            );
+                          } else {
+                            showToast(
+                              'success',
+                              'Carrier Approval Verified',
+                              `Ref: ${item.carrierApprovalRef}. Container authorized for vessel loading.`
+                            );
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors shadow-sm ${
+                          item.carrierApprovalRef
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700 hover:bg-emerald-900'
+                            : 'bg-rose-950 text-rose-300 border border-rose-700 hover:bg-rose-900'
+                        }`}
+                        title="Test Carrier Approval Gate before vessel loading"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{item.carrierApprovalRef ? 'Gate Passed' : 'Test Gate'}</span>
+                      </button>
+
+                      {!item.carrierApprovalRef && (
+                        <button
+                          onClick={() => {
+                            updateDgShipment(item.id, {
+                              carrierApprovalRef: 'MAEU-DG-MUN-2026-99124',
+                              status: 'Carrier Approved'
+                            });
+                            showToast(
+                              'success',
+                              'Carrier Approval Recorded',
+                              'Approval Ref MAEU-DG-MUN-2026-99124 attached. Loading gate now UNLOCKED.'
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-lg bg-[#16263F] hover:bg-[#1D3251] text-sky-400 border border-[#26395A]"
+                          title="Authorize carrier approval"
+                        >
+                          + Authorize
+                        </button>
+                      )}
+
                       <button
                         onClick={() => setActivePrintDoc({ type: 'DGD', data: item })}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-[#0A1628] transition-colors shadow-sm"
@@ -390,33 +442,37 @@ export const DangerousGoodsPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="text-[#A8A299] block mb-1">Cargo Item A (UN Number):</label>
-              <select
-                value={itemA}
-                onChange={e => setItemA(e.target.value)}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-xl p-2.5 text-[#F4EFE6]"
-              >
-                <option value="UN1789">UN1789 - Hydrochloric Acid (Class 8 Acid)</option>
-                <option value="UN1824">UN1824 - Sodium Hydroxide (Class 8 Alkali)</option>
-                <option value="UN1230">UN1230 - Methanol (Class 3 Flammable)</option>
-                <option value="UN3077">UN3077 - Env Hazardous Substance (Class 9)</option>
-              </select>
-            </div>
+              <div>
+                <label className="text-[#A8A299] block mb-1">Cargo Item A (UN Number):</label>
+                <select
+                  value={itemA}
+                  onChange={e => setItemA(e.target.value)}
+                  className="w-full bg-[#16263F] border border-[#26395A] rounded-xl p-2.5 text-[#F4EFE6]"
+                >
+                  <option value="UN1263">UN1263 - Paint (Class 3 Flammable)</option>
+                  <option value="UN1830">UN1830 - Sulphuric Acid (Class 8 Strong Acid)</option>
+                  <option value="UN1789">UN1789 - Hydrochloric Acid (Class 8 Acid)</option>
+                  <option value="UN1824">UN1824 - Sodium Hydroxide (Class 8 Alkali)</option>
+                  <option value="UN1230">UN1230 - Methanol (Class 3 Flammable)</option>
+                  <option value="UN3077">UN3077 - Env Hazardous Substance (Class 9)</option>
+                </select>
+              </div>
 
-            <div>
-              <label className="text-[#A8A299] block mb-1">Cargo Item B (UN Number):</label>
-              <select
-                value={itemB}
-                onChange={e => setItemB(e.target.value)}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-xl p-2.5 text-[#F4EFE6]"
-              >
-                <option value="UN1824">UN1824 - Sodium Hydroxide (Class 8 Alkali)</option>
-                <option value="UN1789">UN1789 - Hydrochloric Acid (Class 8 Acid)</option>
-                <option value="UN1230">UN1230 - Methanol (Class 3 Flammable)</option>
-                <option value="UN3077">UN3077 - Env Hazardous Substance (Class 9)</option>
-              </select>
-            </div>
+              <div>
+                <label className="text-[#A8A299] block mb-1">Cargo Item B (UN Number):</label>
+                <select
+                  value={itemB}
+                  onChange={e => setItemB(e.target.value)}
+                  className="w-full bg-[#16263F] border border-[#26395A] rounded-xl p-2.5 text-[#F4EFE6]"
+                >
+                  <option value="UN1830">UN1830 - Sulphuric Acid (Class 8 Strong Acid)</option>
+                  <option value="UN1263">UN1263 - Paint (Class 3 Flammable)</option>
+                  <option value="UN1824">UN1824 - Sodium Hydroxide (Class 8 Alkali)</option>
+                  <option value="UN1789">UN1789 - Hydrochloric Acid (Class 8 Acid)</option>
+                  <option value="UN1230">UN1230 - Methanol (Class 3 Flammable)</option>
+                  <option value="UN3077">UN3077 - Env Hazardous Substance (Class 9)</option>
+                </select>
+              </div>
           </div>
 
           <button
