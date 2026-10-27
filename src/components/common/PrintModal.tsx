@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Printer, Download, X, ShieldCheck, Check, Copy, ExternalLink, QrCode, FileText, CheckCircle2, Loader2, Share2, Eye, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 import { formatINR, formatUSD, numberToWordsINR } from '../../utils/formatters';
+import { DEFAULT_CARRIER_SEAL_SVG, processImageFile } from '../../utils/imageUtils';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 export const PrintModal: React.FC = () => {
-  const { activePrintDoc, setActivePrintDoc, firmDetails, showToast } = useApp();
+  const { activePrintDoc, setActivePrintDoc, firmDetails, showToast, companySeal, setCompanySeal } = useApp();
 
   const [activeTab, setActiveTab] = useState<'front' | 'annexure' | 'terms' | 'all'>('front');
   const [selectedCopy, setSelectedCopy] = useState<'ORIGINAL 1' | 'ORIGINAL 2' | 'ORIGINAL 3' | 'COPY NON-NEGOTIABLE' | 'TELEX RELEASED'>('ORIGINAL 1');
@@ -433,7 +434,7 @@ export const PrintModal: React.FC = () => {
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [activePrintDoc?.type, activePrintDoc?.data?.id, activePrintDoc?.data?.doNumber, activePrintDoc?.data?.hblNumber, activeTab]);
+  }, [activePrintDoc?.type, activePrintDoc?.data?.id, activePrintDoc?.data?.doNumber, activePrintDoc?.data?.hblNumber, activeTab, companySeal]);
 
   const handleDownloadFullHbl = async () => {
     setIsGeneratingPdf(true);
@@ -1126,9 +1127,60 @@ CONTAINER IN LINER CUSTODY.`;
                               </div>
                             </div>
 
-                            {/* 2. Image Placeholder (Solid Black Box with "Insert image here") */}
-                            <div className="bg-black text-white flex items-center justify-center p-3 text-center font-bold text-[10px] tracking-widest uppercase select-none h-[88px]">
-                              Insert image here
+                            {/* 2. Official Company Seal Box (Printed with user-uploaded seal from account settings) */}
+                            <div className="relative bg-white flex items-center justify-center p-1.5 h-[92px] border-t border-b border-black overflow-hidden group select-none">
+                              {companySeal ? (
+                                <img
+                                  src={companySeal}
+                                  alt="Official Company Seal"
+                                  className="max-h-full max-w-full object-contain mx-auto"
+                                  crossOrigin="anonymous"
+                                />
+                              ) : (
+                                <img
+                                  src={DEFAULT_CARRIER_SEAL_SVG}
+                                  alt="Default Carrier Seal"
+                                  className="max-h-full max-w-full object-contain mx-auto opacity-95"
+                                  crossOrigin="anonymous"
+                                />
+                              )}
+
+                              {/* On-Screen Upload / Change Seal Quick Button (Hidden from Print) */}
+                              <div className="no-print absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20">
+                                <label className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#E88B2A] text-slate-950 shadow hover:bg-[#d47b1c] cursor-pointer flex items-center gap-1">
+                                  <span>{companySeal ? 'Change Seal' : 'Upload Seal'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async e => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        try {
+                                          const dataUrl = await processImageFile(file);
+                                          setCompanySeal(dataUrl);
+                                          showToast('success', 'Company Seal Updated', 'New seal printed on HBL document.');
+                                        } catch {
+                                          showToast('error', 'Upload Failed', 'Could not process the selected image.');
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </label>
+                                {companySeal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCompanySeal(null);
+                                      showToast('info', 'Seal Reset', 'Default official carrier seal restored.');
+                                    }}
+                                    className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-600 text-white shadow hover:bg-rose-500 cursor-pointer"
+                                    title="Reset to default carrier seal"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             {/* 3. Legal Terms Block */}
@@ -1335,7 +1387,12 @@ CONTAINER IN LINER CUSTODY.`;
                               </div>
                             </div>
 
-                            <div className="my-1">
+                            <div className="my-1 relative">
+                              {companySeal ? (
+                                <div className="absolute -top-3 right-0 opacity-40 pointer-events-none">
+                                  <img src={companySeal} alt="Carrier Endorsement Stamp" className="h-10 max-w-[80px] object-contain" />
+                                </div>
+                              ) : null}
                               <div className="h-6"></div>
                               <div className="font-bold uppercase text-[7px] text-black">
                                 AS AGENTS/CARRIER

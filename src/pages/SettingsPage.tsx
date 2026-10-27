@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Settings, Building2, CreditCard, Hash, Cable, ShieldCheck, Check, Image, Upload, FileText, Download, User, Search, History, Eye } from 'lucide-react';
+import { Settings, Building2, CreditCard, Hash, Cable, ShieldCheck, Check, Image, Upload, FileText, Download, User, Search, History, Eye, Trash2 } from 'lucide-react';
 import { formatINR } from '../utils/formatters';
+import { DEFAULT_CARRIER_SEAL_SVG, processImageFile } from '../utils/imageUtils';
 
 export const SettingsPage: React.FC = () => {
-  const { firmDetails, auditLogs, showToast, currentUser } = useApp();
+  const { firmDetails, auditLogs, showToast, currentUser, companySeal, setCompanySeal } = useApp();
 
   const [activeTab, setActiveTab] = useState<'firm' | 'branding' | 'audit' | 'bank' | 'numbering' | 'integrations' | 'subscription' | 'branches' | 'approvals'>('firm');
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(() => localStorage.getItem('maps_firm_logo') || null);
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(() => localStorage.getItem('maps_firm_signature') || null);
   const [auditSearch, setAuditSearch] = useState('');
   const [selectedAuditModule, setSelectedAuditModule] = useState('ALL');
 
@@ -154,13 +155,13 @@ export const SettingsPage: React.FC = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Asset 1: Company Logo */}
             <div className="bg-[#16263F] border border-[#26395A] rounded-xl p-3.5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-xs text-[#F4EFE6] flex items-center gap-1.5">
                   <Image className="w-4 h-4 text-[#E88B2A]" />
-                  Company Logo (SVG / PNG)
+                  Company Logo (Header)
                 </span>
                 <p className="text-[10px] text-[#A8A299] mt-1">
                   High-res logo for header & customer tracking portal. Recommended 400x120px transparent PNG.
@@ -191,12 +192,17 @@ export const SettingsPage: React.FC = () => {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={e => {
+                    onChange={async e => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const url = URL.createObjectURL(file);
-                        setLogoPreview(url);
-                        showToast('success', 'Logo Uploaded', 'New firm logo applied to documents.');
+                        try {
+                          const dataUrl = await processImageFile(file);
+                          setLogoPreview(dataUrl);
+                          localStorage.setItem('maps_firm_logo', dataUrl);
+                          showToast('success', 'Logo Uploaded', 'New firm logo applied to documents.');
+                        } catch {
+                          showToast('error', 'Upload Error', 'Could not process logo file.');
+                        }
                       }
                     }}
                   />
@@ -204,7 +210,69 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Asset 2: Letterhead Artwork */}
+            {/* Asset 2: Official Company Seal (Printed on HBL) */}
+            <div className="bg-[#16263F] border border-[#E88B2A]/50 shadow-md shadow-[#E88B2A]/5 rounded-xl p-3.5 space-y-3 flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-[#E88B2A] text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-bl uppercase">
+                HBL Print Box
+              </div>
+              <div>
+                <span className="font-bold text-xs text-[#F4EFE6] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#E88B2A]" />
+                  Company Seal (HBL)
+                </span>
+                <p className="text-[10px] text-[#A8A299] mt-1">
+                  Printed in the designated Carrier Seal box in the top-right quadrant of House Bills of Lading.
+                </p>
+
+                <div className="mt-3 aspect-video bg-white border-2 border-dashed border-[#26395A] rounded-lg flex flex-col items-center justify-center p-2 text-center shadow-inner overflow-hidden">
+                  <img
+                    src={companySeal || DEFAULT_CARRIER_SEAL_SVG}
+                    alt="Company Seal on HBL"
+                    className="max-h-16 max-w-full object-contain"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-slate-950 font-bold cursor-pointer transition-colors text-center text-xs shadow-sm">
+                  <Upload className="w-3.5 h-3.5" />
+                  {companySeal ? 'Change HBL Seal' : 'Upload HBL Seal'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const dataUrl = await processImageFile(file);
+                          setCompanySeal(dataUrl);
+                          showToast('success', 'Company Seal Linked', 'Image updated and ready to print in HBL box.');
+                        } catch {
+                          showToast('error', 'Upload Error', 'Could not process seal image.');
+                        }
+                      }
+                    }}
+                  />
+                </label>
+
+                {companySeal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompanySeal(null);
+                      showToast('info', 'Seal Reset', 'Default official carrier seal restored for HBL.');
+                    }}
+                    className="w-full flex items-center justify-center gap-1 text-[10px] text-rose-300 hover:text-rose-200 py-0.5 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Reset to Default Seal
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Asset 3: Letterhead Artwork */}
             <div className="bg-[#16263F] border border-[#26395A] rounded-xl p-3.5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-xs text-[#F4EFE6] flex items-center gap-1.5">
@@ -238,15 +306,15 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Asset 3: Authorized Signatory Stamp & Signature */}
+            {/* Asset 4: Authorized Signatory Stamp & Signature */}
             <div className="bg-[#16263F] border border-[#26395A] rounded-xl p-3.5 space-y-3 flex flex-col justify-between">
               <div>
                 <span className="font-bold text-xs text-[#F4EFE6] flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  Authorized Signature & Stamp
+                  Authorized Signature Stamp
                 </span>
                 <p className="text-[10px] text-[#A8A299] mt-1">
-                  Digital stamp for 3-Original HBL issuance and Tax Invoices. Includes chamber seal.
+                  Digital signature and agent endorsement stamp for the signing block.
                 </p>
 
                 <div className="mt-3 aspect-video bg-[#0F1D33] border-2 border-dashed border-[#26395A] rounded-lg flex flex-col items-center justify-center p-3 text-center">
@@ -268,17 +336,22 @@ export const SettingsPage: React.FC = () => {
               <div>
                 <label className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F1D33] hover:bg-[#1E3558] text-[#F4EFE6] border border-[#26395A] font-semibold cursor-pointer transition-colors text-center">
                   <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                  Upload Signatory Stamp
+                  Upload Signature Stamp
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={e => {
+                    onChange={async e => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const url = URL.createObjectURL(file);
-                        setSignaturePreview(url);
-                        showToast('success', 'Signature Stamp Saved', 'Authorized stamp linked to HBL printing.');
+                        try {
+                          const dataUrl = await processImageFile(file);
+                          setSignaturePreview(dataUrl);
+                          localStorage.setItem('maps_firm_signature', dataUrl);
+                          showToast('success', 'Signature Stamp Saved', 'Authorized stamp linked to HBL printing.');
+                        } catch {
+                          showToast('error', 'Upload Error', 'Could not process signature file.');
+                        }
                       }
                     }}
                   />

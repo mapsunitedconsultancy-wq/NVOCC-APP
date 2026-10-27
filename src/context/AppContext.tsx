@@ -106,6 +106,8 @@ interface AppContextType {
   updateCurrentUser: (updates: Partial<User>) => void;
   switchUserRole: (role: UserRole) => void;
   users: User[];
+  companySeal: string | null;
+  setCompanySeal: (seal: string | null) => void;
 
   // Automation & Interconnection Chains
   createInvoiceFromShipment: (shipmentId: string) => Invoice | null;
@@ -316,6 +318,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('maps_user_role', role);
     localStorage.setItem('maps_current_user', JSON.stringify(match));
     showToast('info', `Switched Role to ${match.title}`, `Now logged in as ${match.name} (${role.toUpperCase()})`);
+  };
+
+  // Company Seal state (persisted in localStorage and linked to user/firm)
+  const [companySeal, setCompanySealState] = useState<string | null>(() => {
+    return localStorage.getItem('maps_company_seal') || currentUser?.companySeal || null;
+  });
+
+  const setCompanySeal = (seal: string | null) => {
+    setCompanySealState(seal);
+    if (seal) {
+      try {
+        localStorage.setItem('maps_company_seal', seal);
+      } catch (err) {
+        console.warn('Could not store full seal in localStorage', err);
+      }
+    } else {
+      localStorage.removeItem('maps_company_seal');
+    }
+    setCurrentUser(prev => {
+      const updated = { ...prev, companySeal: seal || undefined };
+      try {
+        localStorage.setItem('maps_current_user', JSON.stringify(updated));
+      } catch {
+        // quota safety
+      }
+      return updated;
+    });
   };
 
   // Routing State (URL-like inside SPA)
@@ -1436,6 +1465,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCurrentUser,
         switchUserRole,
         users,
+        companySeal,
+        setCompanySeal,
         theme,
         toggleTheme,
         universalSearch,

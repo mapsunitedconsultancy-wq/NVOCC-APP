@@ -15,9 +15,16 @@ import {
   Key,
   Lock,
   Anchor,
-  Clock
+  Clock,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  ShieldCheck,
+  FileCheck,
+  RefreshCw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { DEFAULT_CARRIER_SEAL_SVG, processImageFile } from '../../utils/imageUtils';
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -28,9 +35,10 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { currentUser, updateCurrentUser, theme, toggleTheme, density, toggleDensity, showToast } = useApp();
+  const { currentUser, updateCurrentUser, theme, toggleTheme, density, toggleDensity, showToast, companySeal, setCompanySeal, firmDetails } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'security' | 'notifications'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'seal' | 'preferences' | 'security' | 'notifications'>('profile');
+  const [isProcessingSeal, setIsProcessingSeal] = useState(false);
 
   // Profile Form state
   const [name, setName] = useState(currentUser.name);
@@ -143,6 +151,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         <div className="flex items-center px-4 sm:px-5 bg-[#08101E] border-b border-[#15233C] gap-1 overflow-x-auto text-xs">
           {[
             { id: 'profile', label: 'My Profile', icon: User },
+            { id: 'seal', label: 'Company Seal (HBL)', icon: ShieldCheck },
             { id: 'preferences', label: 'Preferences & Port', icon: Globe },
             { id: 'notifications', label: 'Alerts & Comms', icon: Bell },
             { id: 'security', label: 'Security & Auth', icon: Shield }
@@ -267,6 +276,43 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* Company Seal Status in Profile */}
+              <div className="p-3 bg-[#08101E] border border-[#16263F] rounded-xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-10 rounded-lg bg-white p-1 border border-[#26395A] flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
+                    <img
+                      src={companySeal || DEFAULT_CARRIER_SEAL_SVG}
+                      alt="Company Seal Thumbnail"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-[#F4EFE6] block flex items-center gap-1.5">
+                      House Bill of Lading (HBL) Seal
+                      {companySeal ? (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-normal">
+                          Custom Seal Active
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-950 text-sky-400 border border-sky-800 font-normal">
+                          Default Carrier Seal
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[11px] text-[#A8A299]">
+                      Printed in the designated Carrier Seal box on all HBL documents.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('seal')}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#16263F] hover:bg-[#1E3558] text-[#E88B2A] border border-[#E88B2A]/40 font-semibold text-xs transition-colors shrink-0"
+                >
+                  Manage Seal
+                </button>
+              </div>
+
               <div className="p-3 bg-[#08101E] border border-[#16263F] rounded-xl flex items-center justify-between text-xs text-[#A8A299]">
                 <div>
                   <span className="font-semibold text-[#F4EFE6] block">Account Status: Active</span>
@@ -287,6 +333,176 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 </button>
               </div>
             </form>
+          )}
+
+          {/* TAB: Company Seal for HBL */}
+          {activeTab === 'seal' && (
+            <div className="space-y-4">
+              {/* Header Banner */}
+              <div className="p-3.5 bg-gradient-to-r from-[#0F1D33] to-[#16263F] border border-[#26395A] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-[#E88B2A]" />
+                    <h3 className="font-bold text-sm text-[#F4EFE6]">
+                      Company Seal for House Bill of Lading (HBL)
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-[#A8A299]">
+                    The image uploaded here is automatically printed in the designated box on the official HBL (Combined Transport Bill of Lading).
+                  </p>
+                </div>
+                <span className={`px-2 py-1 rounded font-mono text-[10px] font-bold border shrink-0 ${
+                  companySeal
+                    ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                    : 'bg-sky-950 text-sky-400 border-sky-800'
+                }`}>
+                  {companySeal ? '✓ Custom Seal Linked' : '★ Default Carrier Seal'}
+                </span>
+              </div>
+
+              {/* Upload Card */}
+              <div className="bg-[#0F1D33] border border-[#26395A] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-xs text-[#F4EFE6] flex items-center gap-1.5">
+                    <Upload className="w-4 h-4 text-[#E88B2A]" />
+                    Upload Company Seal Image
+                  </span>
+                  <span className="text-[10px] text-[#A8A299]">
+                    PNG, JPG, SVG, WebP • Transparent PNG recommended
+                  </span>
+                </div>
+
+                <label className="border-2 border-dashed border-[#26395A] hover:border-[#E88B2A]/60 bg-[#0A1628]/60 hover:bg-[#16263F]/40 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors text-center group">
+                  <input
+                    type="file"
+                    accept="image/*,.png,.jpg,.jpeg,.svg,.webp"
+                    className="hidden"
+                    disabled={isProcessingSeal}
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setIsProcessingSeal(true);
+                      try {
+                        const dataUrl = await processImageFile(file);
+                        setCompanySeal(dataUrl);
+                        showToast('success', 'Company Seal Uploaded', 'Seal image successfully saved and linked to HBL documents.');
+                      } catch (err: any) {
+                        showToast('error', 'Upload Failed', err?.message || 'Could not process seal image.');
+                      } finally {
+                        setIsProcessingSeal(false);
+                      }
+                    }}
+                  />
+                  <div className="w-12 h-12 rounded-full bg-[#16263F] group-hover:bg-[#E88B2A]/20 flex items-center justify-center mb-2 transition-colors">
+                    <Upload className="w-5 h-5 text-[#E88B2A]" />
+                  </div>
+                  <span className="font-bold text-xs text-[#F4EFE6]">
+                    {isProcessingSeal ? 'Processing Image...' : 'Click or Drag & Drop to Upload Seal'}
+                  </span>
+                  <span className="text-[10px] text-[#A8A299] mt-0.5">
+                    Recommended resolution: 400×120px to 800×240px (transparent or white background)
+                  </span>
+                </label>
+              </div>
+
+              {/* Dual Previews */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Seal Graphic Preview */}
+                <div className="bg-[#0F1D33] border border-[#26395A] rounded-xl p-4 flex flex-col justify-between space-y-3">
+                  <div>
+                    <span className="font-bold text-xs text-[#F4EFE6] block mb-1">
+                      Current Seal Image Preview
+                    </span>
+                    <p className="text-[10px] text-[#A8A299]">
+                      How your seal asset appears in the system:
+                    </p>
+
+                    <div className="mt-2.5 p-3 rounded-lg bg-white border border-zinc-300 flex items-center justify-center min-h-[96px] shadow-inner">
+                      <img
+                        src={companySeal || DEFAULT_CARRIER_SEAL_SVG}
+                        alt="Current Company Seal"
+                        className="max-h-20 max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1C2D4A]">
+                    <span className="text-[10px] text-[#A8A299]">
+                      {companySeal ? 'Custom seal uploaded' : 'Default MAPS seal active'}
+                    </span>
+                    {companySeal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCompanySeal(null);
+                          showToast('info', 'Seal Reset', 'Default official carrier seal restored.');
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-[10px] font-semibold transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Reset to Default</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. LIVE HBL DOCUMENT BOX MOCKUP */}
+                <div className="bg-[#0F1D33] border border-[#26395A] rounded-xl p-4 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-[#F4EFE6] block">
+                        Live HBL Document Box Mockup
+                      </span>
+                      <span className="text-[9px] font-mono text-[#E88B2A]">
+                        EXACT PRINT BOX
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#A8A299]">
+                      Preview of the designated top-right box on the House Bill of Lading:
+                    </p>
+
+                    {/* Miniature HBL Box Replica */}
+                    <div className="mt-2.5 bg-white text-black rounded border border-black overflow-hidden font-sans shadow-sm">
+                      {/* Top Barcode Header */}
+                      <div className="border-b border-black p-1 flex items-center justify-between bg-zinc-50 text-[7px] font-bold">
+                        <span>B/L NUMBER: LCMUNJEALMU2600407</span>
+                        <span className="font-mono text-zinc-500">ORIGINAL</span>
+                      </div>
+                      
+                      {/* THE DESIGNATED SEAL BOX */}
+                      <div className="h-[76px] p-1.5 flex items-center justify-center bg-white border-b border-black overflow-hidden">
+                        <img
+                          src={companySeal || DEFAULT_CARRIER_SEAL_SVG}
+                          alt="HBL Printed Seal"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+
+                      {/* Terms below */}
+                      <div className="p-1 text-[5.5px] leading-tight text-zinc-600 bg-zinc-50 text-justify">
+                        Received by the Carrier the Goods as specified in apparent good order and condition subject to all terms and conditions of this Bill of Lading.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-emerald-400 font-medium flex items-center gap-1.5 pt-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Verified: Perfectly centered & high-resolution print ready</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#1C2D4A]">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-slate-950 font-bold text-xs transition-colors shadow-md shadow-[#E88B2A]/20"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           )}
 
           {/* TAB 2: Preferences */}

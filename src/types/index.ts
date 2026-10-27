@@ -11,6 +11,7 @@ export interface User {
   department: string;
   status: 'active' | 'inactive';
   lastLogin: string;
+  companySeal?: string;
 }
 
 export type ShipmentStatus = 
