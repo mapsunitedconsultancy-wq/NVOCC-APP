@@ -26,7 +26,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
-  const { showToast } = useApp();
+  const { showToast, setActiveView } = useApp();
 
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [demoName, setDemoName] = useState('');
@@ -63,16 +63,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={onEnterApp}
-            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[#16263F] hover:bg-[#1D3251] text-[#F4EFE6] border border-[#26395A] transition-colors"
+            onClick={() => setActiveView('login')}
+            className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[#16263F] hover:bg-[#1D3251] text-[#F4EFE6] border border-[#26395A] transition-colors cursor-pointer"
           >
-            Launch Live App
+            Sign In
           </button>
           <button
-            onClick={() => setShowDemoModal(true)}
-            className="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-[#0A1628] transition-all shadow-md shadow-[#E88B2A]/20"
+            onClick={() => setActiveView('register')}
+            className="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-[#0A1628] transition-all shadow-md shadow-[#E88B2A]/20 cursor-pointer"
           >
-            Request Demo
+            Register Firm (8-Digit OTP)
           </button>
         </div>
       </nav>

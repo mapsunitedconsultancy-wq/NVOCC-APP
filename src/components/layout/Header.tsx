@@ -20,7 +20,8 @@ import {
   Menu,
   User,
   Settings,
-  SlidersHorizontal
+  SlidersHorizontal,
+  LogOut
 } from 'lucide-react';
 
 import { NotificationsCenter } from '../common/NotificationsCenter';
@@ -58,7 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
     shipments,
     approvalRequests,
     setActiveView,
-    setViewParam
+    setViewParam,
+    logout
   } = useApp();
 
   const pendingApprovalsCount = approvalRequests ? approvalRequests.filter(r => r.status === 'Pending').length : 0;
@@ -111,86 +113,39 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <div className="sticky top-0 z-30 shrink-0">
-      {/* Live FX Rate Scrolling Ticker */}
-      <div className="w-full bg-[#060D18] border-b border-[#16263F] py-1 px-3 sm:px-6 text-[10px] text-[#A8A299] flex items-center justify-between overflow-hidden select-none">
-        <div className="flex items-center gap-1.5 shrink-0 font-bold uppercase tracking-wider text-[#E88B2A]">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="text-[9px]">LIVE FX (RBI / ICEGATE):</span>
-        </div>
-        <div className="flex-1 overflow-x-auto no-scrollbar mx-3">
-          <div className="flex items-center gap-5 whitespace-nowrap font-mono">
-            <span className="text-[#F4EFE6]"><strong className="text-emerald-400">USD/INR</strong> ₹83.92 <span className="text-emerald-400 text-[9px]">(+0.04%)</span></span>
-            <span className="text-[#3A4D6B]">•</span>
-            <span className="text-[#F4EFE6]"><strong className="text-sky-300">EUR/INR</strong> ₹91.45 <span className="text-rose-400 text-[9px]">(-0.12%)</span></span>
-            <span className="text-[#3A4D6B]">•</span>
-            <span className="text-[#F4EFE6]"><strong className="text-amber-300">AED/INR</strong> ₹22.85 <span className="text-[#A8A299] text-[9px]">(0.00%)</span></span>
-            <span className="text-[#3A4D6B]">•</span>
-            <span className="text-[#F4EFE6]"><strong className="text-emerald-400">GBP/INR</strong> ₹109.18 <span className="text-emerald-400 text-[9px]">(+0.21%)</span></span>
-            <span className="text-[#3A4D6B]">•</span>
-            <span className="text-[#F4EFE6]"><strong className="text-sky-300">JPY/INR (100)</strong> ₹56.40 <span className="text-emerald-400 text-[9px]">(+0.08%)</span></span>
-            <span className="text-[#3A4D6B]">•</span>
-            <span className="text-amber-300 font-sans text-[10px]">Mundra Customs Circular 14/2026</span>
-          </div>
-        </div>
-        <div className="hidden md:flex items-center gap-1.5 shrink-0 text-[9px] text-emerald-400 font-mono">
-          <span>PORT INMUN LIVE</span>
-        </div>
-      </div>
-
       <header className="h-14 border-b border-[#1C2D4A] bg-[#0A1628]/95 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between">
-      {/* Left: Brand Identity */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {onToggleMobileMenu && (
-          <button
-            onClick={onToggleMobileMenu}
-            className="lg:hidden p-1.5 rounded-lg text-[#A8A299] hover:text-[#F4EFE6] hover:bg-[#16263F] -ml-1 transition-colors"
-            title="Open navigation menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        )}
-        <div 
-          onClick={() => { setActiveView('dashboard'); setViewParam(undefined); }}
-          className="flex items-center gap-2 cursor-pointer group"
-        >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#E88B2A] to-[#B06010] flex items-center justify-center font-black text-slate-950 shadow-md shadow-[#E88B2A]/20">
-            <Ship className="w-5 h-5 text-slate-950" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-display font-bold text-base tracking-tight text-[#F4EFE6] group-hover:text-[#E88B2A] transition-colors">
-                MAPS NVOCC PRO
-              </span>
-              <span className="px-1.5 py-0.2 text-[9px] font-bold bg-[#E88B2A]/20 text-[#E88B2A] rounded border border-[#E88B2A]/30">
-                v3.0
-              </span>
-            </div>
-            <p className="text-[10px] text-[#A8A299] -mt-0.5 font-medium hidden sm:block">
-              Gandhidham • Mundra • Kandla
-            </p>
-          </div>
+        {/* Left: Mobile Navigation Trigger only (Branding maintained exclusively on sidebar) */}
+        <div className="flex items-center gap-2">
+          {onToggleMobileMenu && (
+            <button
+              onClick={onToggleMobileMenu}
+              className="lg:hidden p-1.5 rounded-lg text-[#A8A299] hover:text-[#F4EFE6] hover:bg-[#16263F] -ml-1 transition-colors cursor-pointer"
+              title="Open navigation menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
         </div>
-      </div>
 
-      {/* Middle: Universal Search (Cmd+K) */}
-      <div 
-        onClick={() => onOpenSearch ? onOpenSearch() : setShowSearchResults(true)}
-        className="relative flex-1 min-w-[200px] max-w-md mx-3 hidden md:block cursor-pointer group"
-      >
-        <div className="relative">
-          <Search className="w-4 h-4 text-[#A8A299] group-hover:text-[#E88B2A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
-          <input
-            type="text"
-            readOnly
-            onClick={() => onOpenSearch && onOpenSearch()}
-            placeholder="Universal search: Shipments, HBLs, Invoices, Parties..."
-            className="w-full bg-[#0F1D33] border border-[#26395A] group-hover:border-[#E88B2A]/60 rounded-lg pl-9 pr-14 py-1.5 text-xs text-[#F4EFE6] placeholder-[#6E6A64] cursor-pointer transition-colors shadow-inner"
-          />
-          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-[#A8A299] bg-[#16263F] border border-[#26395A] rounded pointer-events-none">
-            ⌘K
-          </kbd>
+        {/* Middle: Universal Search (Cmd+K) */}
+        <div 
+          onClick={() => onOpenSearch ? onOpenSearch() : setShowSearchResults(true)}
+          className="relative flex-1 min-w-[200px] max-w-lg mx-3 hidden md:block cursor-pointer group"
+        >
+          <div className="relative">
+            <Search className="w-4 h-4 text-[#A8A299] group-hover:text-[#E88B2A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
+            <input
+              type="text"
+              readOnly
+              onClick={() => onOpenSearch && onOpenSearch()}
+              placeholder="Universal search: Shipments, HBLs, Invoices, Parties..."
+              className="w-full bg-[#0F1D33] border border-[#26395A] group-hover:border-[#E88B2A]/60 rounded-lg pl-9 pr-14 py-1.5 text-xs text-[#F4EFE6] placeholder-[#6E6A64] cursor-pointer transition-colors shadow-inner"
+            />
+            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-[#A8A299] bg-[#16263F] border border-[#26395A] rounded pointer-events-none">
+              ⌘K
+            </kbd>
+          </div>
         </div>
-      </div>
 
       {/* Right Controls: Role Switcher, Quick Actions, Alerts, Theme, User */}
       <div className="flex items-center gap-2">
@@ -453,8 +408,8 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* Role Switcher Drawer Accordion / Link */}
-              <div className="pt-2 mt-2 border-t border-[#1C2D4A]">
+              {/* Role Switcher Drawer Accordion & Sign Out */}
+              <div className="pt-2 mt-2 border-t border-[#1C2D4A] space-y-1.5">
                 <button
                   onClick={() => {
                     setShowAccountMenu(false);
@@ -467,6 +422,17 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>Switch Active Persona (RBAC)</span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/40 transition-colors cursor-pointer text-left"
+                >
+                  <LogOut className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-semibold">Sign Out from Workspace</span>
                 </button>
               </div>
             </div>

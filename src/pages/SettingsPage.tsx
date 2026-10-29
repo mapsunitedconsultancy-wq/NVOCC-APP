@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Settings, Building2, CreditCard, Hash, Cable, ShieldCheck, Check, Image, Upload, FileText, Download, User, Search, History, Eye, Trash2 } from 'lucide-react';
+import { Settings, Building2, CreditCard, Hash, Cable, ShieldCheck, Check, Image, Upload, FileText, Download, User, Search, History, Eye, Trash2, Lock } from 'lucide-react';
 import { formatINR } from '../utils/formatters';
 import { DEFAULT_CARRIER_SEAL_SVG, processImageFile } from '../utils/imageUtils';
 
 export const SettingsPage: React.FC = () => {
-  const { firmDetails, auditLogs, showToast, currentUser, companySeal, setCompanySeal } = useApp();
+  const { firmDetails, updateFirmDetails, auditLogs, showToast, currentUser, companySeal, setCompanySeal } = useApp();
 
   const [activeTab, setActiveTab] = useState<'firm' | 'branding' | 'audit' | 'bank' | 'numbering' | 'integrations' | 'subscription' | 'branches' | 'approvals'>('firm');
   const [logoPreview, setLogoPreview] = useState<string | null>(() => localStorage.getItem('maps_firm_logo') || null);
   const [signaturePreview, setSignaturePreview] = useState<string | null>(() => localStorage.getItem('maps_firm_signature') || null);
   const [auditSearch, setAuditSearch] = useState('');
   const [selectedAuditModule, setSelectedAuditModule] = useState('ALL');
+
+  // Firm Editable State (GSTIN is strictly immutable)
+  const [legalName, setLegalName] = useState(firmDetails.legalName);
+  const [tradeName, setTradeName] = useState(firmDetails.tradeName);
+  const [iec, setIec] = useState(firmDetails.iec);
+  const [registeredAddress, setRegisteredAddress] = useState(firmDetails.registeredAddress);
+  const [phone, setPhone] = useState(firmDetails.phone || '');
+  const [email, setEmail] = useState(firmDetails.email || '');
+  const [website, setWebsite] = useState(firmDetails.website || '');
 
   const filteredLogs = auditLogs.filter(log => {
     const matchesSearch = log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
@@ -88,32 +97,75 @@ export const SettingsPage: React.FC = () => {
               <label className="block text-[#A8A299] mb-1 font-semibold">Legal Entity Name</label>
               <input
                 type="text"
-                defaultValue={firmDetails.legalName}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-semibold"
+                value={legalName}
+                onChange={e => setLegalName(e.target.value)}
+                className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] font-semibold focus:outline-hidden"
               />
             </div>
             <div>
-              <label className="block text-[#A8A299] mb-1 font-semibold">Brand Trade Name</label>
+              <label className="block text-[#A8A299] mb-1 font-semibold">Brand / Trade Name</label>
               <input
                 type="text"
-                defaultValue={firmDetails.tradeName}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6]"
+                value={tradeName}
+                onChange={e => setTradeName(e.target.value)}
+                className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] focus:outline-hidden"
               />
             </div>
+
+            {/* GSTIN: STRICTLY IMMUTABLE / LOCKED */}
             <div>
-              <label className="block text-[#A8A299] mb-1 font-semibold">GSTIN (Gujarat 24)</label>
-              <input
-                type="text"
-                defaultValue={firmDetails.gstin}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono font-bold"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[#A8A299] font-semibold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>GSTIN Number</span>
+                </label>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60">
+                  LOCKED (Statutory Anchor)
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={firmDetails.gstin || '24AARCM6698J1ZK'}
+                  className="w-full bg-[#0B1424] border border-[#21375B] rounded-lg p-2 text-[#C5BFA9] font-mono font-bold opacity-80 cursor-not-allowed select-all"
+                />
+              </div>
+              <span className="text-[10px] text-[#8C877D] mt-1 block">
+                GSTIN is permanently anchored to this business entity for GST / e-Way bill & customs compliance. It cannot be edited.
+              </span>
             </div>
+
             <div>
               <label className="block text-[#A8A299] mb-1 font-semibold">Importer Exporter Code (IEC)</label>
               <input
                 type="text"
-                defaultValue={firmDetails.iec}
-                className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6] font-mono"
+                value={iec}
+                onChange={e => setIec(e.target.value.toUpperCase())}
+                className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] font-mono uppercase focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[#A8A299] mb-1 font-semibold">Official Phone Number</label>
+              <input
+                type="text"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+91 2836 123456"
+                className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[#A8A299] mb-1 font-semibold">Official Invoicing Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="accounts@mapsfreight.com"
+                className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] focus:outline-hidden"
               />
             </div>
           </div>
@@ -121,16 +173,28 @@ export const SettingsPage: React.FC = () => {
           <div>
             <label className="block text-[#A8A299] mb-1 font-semibold">Registered Office Address</label>
             <textarea
-              defaultValue={firmDetails.registeredAddress}
+              value={registeredAddress}
+              onChange={e => setRegisteredAddress(e.target.value)}
               rows={2}
-              className="w-full bg-[#16263F] border border-[#26395A] rounded-lg p-2 text-[#F4EFE6]"
+              className="w-full bg-[#16263F] border border-[#26395A] focus:border-[#E88B2A] rounded-lg p-2 text-[#F4EFE6] focus:outline-hidden"
             />
           </div>
 
           <div className="flex justify-end pt-2">
             <button
-              onClick={() => showToast('success', 'Firm Profile Saved', 'Updated company profile and tax credentials.')}
-              className="px-4 py-1.5 rounded-lg bg-[#E88B2A] text-[#0A1628] font-bold"
+              onClick={() => {
+                updateFirmDetails({
+                  legalName,
+                  tradeName,
+                  iec,
+                  registeredAddress,
+                  phone,
+                  email,
+                  website
+                });
+                showToast('success', 'Firm Details Saved', 'Company identity updated across all HBLs, manifests & invoices.');
+              }}
+              className="px-4 py-2 rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-[#0A1628] font-bold text-xs transition-colors shadow-md shadow-[#E88B2A]/20 cursor-pointer"
             >
               Save Profile Changes
             </button>

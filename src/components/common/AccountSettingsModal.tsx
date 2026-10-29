@@ -21,7 +21,8 @@ import {
   Trash2,
   ShieldCheck,
   FileCheck,
-  RefreshCw
+  RefreshCw,
+  LogOut
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_CARRIER_SEAL_SVG, processImageFile } from '../../utils/imageUtils';
@@ -35,7 +36,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { currentUser, updateCurrentUser, theme, toggleTheme, density, toggleDensity, showToast, companySeal, setCompanySeal, firmDetails } = useApp();
+  const { currentUser, updateCurrentUser, theme, toggleTheme, density, toggleDensity, showToast, companySeal, setCompanySeal, firmDetails, logout } = useApp();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'seal' | 'preferences' | 'security' | 'notifications'>('profile');
   const [isProcessingSeal, setIsProcessingSeal] = useState(false);
@@ -755,10 +756,22 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 </span>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex items-center justify-between pt-2 border-t border-[#1C2E4C]/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    logout();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-950/40 hover:bg-red-950/70 border border-red-900/60 text-red-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out of Account</span>
+                </button>
+
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-slate-950 font-bold text-xs transition-colors shadow-md shadow-[#E88B2A]/20"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E88B2A] hover:bg-[#d47b1c] text-slate-950 font-bold text-xs transition-colors shadow-md shadow-[#E88B2A]/20 cursor-pointer"
                 >
                   <Key className="w-3.5 h-3.5" />
                   <span>Update Password</span>

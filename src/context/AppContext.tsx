@@ -93,6 +93,9 @@ import {
   AutomationResult
 } from '../utils/automationChains';
 
+import { supabase } from '../services/supabase';
+import { formatSupabaseUser, signOutUser, isRegistrationComplete } from '../services/authService';
+
 export interface ToastMessage {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
@@ -102,12 +105,19 @@ export interface ToastMessage {
 
 interface AppContextType {
   firmDetails: typeof FIRM_DETAILS;
+  updateFirmDetails: (updates: Partial<typeof FIRM_DETAILS>) => void;
   currentUser: User;
   updateCurrentUser: (updates: Partial<User>) => void;
   switchUserRole: (role: UserRole) => void;
   users: User[];
   companySeal: string | null;
   setCompanySeal: (seal: string | null) => void;
+
+  // Supabase Authentication state
+  isAuthenticated: boolean;
+  authSession: any;
+  setAuthSession: (session: any, user?: any) => void;
+  logout: () => Promise<void>;
 
   // Automation & Interconnection Chains
   createInvoiceFromShipment: (shipmentId: string) => Invoice | null;
@@ -347,8 +357,127 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // Company Firm Details (initialized from local storage or defaults)
+  const [firmDetails, setFirmDetails] = useState<typeof FIRM_DETAILS>(() => {
+    const saved = localStorage.getItem('maps_firm_details');
+    if (saved) {
+      try {
+        return { ...FIRM_DETAILS, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return FIRM_DETAILS;
+  });
+
+  const updateFirmDetails = (updates: Partial<typeof FIRM_DETAILS>) => {
+    setFirmDetails(prev => {
+      const merged = { ...prev, ...updates };
+      try {
+        localStorage.setItem('maps_firm_details', JSON.stringify(merged));
+      } catch {}
+      return merged;
+    });
+  };
+
+  // Supabase Authentication State
+  const [authSession, setAuthSessionState] = useState<any>(() => {
+    const saved = localStorage.getItem('maps_supabase_session');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem('maps_supabase_session'));
+  });
+
+  const setAuthSession = (session: any, authUser?: any) => {
+    setAuthSessionState(session);
+    setIsAuthenticated(Boolean(session));
+    if (session) {
+      try {
+        localStorage.setItem('maps_supabase_session', JSON.stringify(session));
+      } catch {}
+      if (authUser) {
+        const formatted = formatSupabaseUser(authUser);
+        setCurrentUser(formatted);
+        localStorage.setItem('maps_current_user', JSON.stringify(formatted));
+        if (authUser.user_metadata?.firm) {
+          updateFirmDetails(authUser.user_metadata.firm);
+        }
+      }
+    } else {
+      localStorage.removeItem('maps_supabase_session');
+    }
+  };
+
+  const logout = async () => {
+    await signOutUser();
+    setAuthSession(null);
+    setIsAuthenticated(false);
+    setActiveView('login');
+    showToast('info', 'Signed Out', 'You have been securely signed out of your workspace.');
+  };
+
+  // Sync Supabase Auth session on initialization
+  useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setAuthSessionState(session);
+        setIsAuthenticated(true);
+        if (session.user) {
+          const formatted = formatSupabaseUser(session.user);
+          setCurrentUser(formatted);
+          if (session.user.user_metadata?.firm) {
+            updateFirmDetails(session.user.user_metadata.firm);
+          }
+          const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
+          if (!isComplete) {
+            // Security enforcement: redirect incomplete registration to register step
+            setActiveView(prev => (prev === 'dashboard' ? 'register' : prev));
+          }
+        }
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setAuthSessionState(session);
+        setIsAuthenticated(true);
+        if (session.user) {
+          const formatted = formatSupabaseUser(session.user);
+          setCurrentUser(formatted);
+          if (session.user.user_metadata?.firm) {
+            updateFirmDetails(session.user.user_metadata.firm);
+          }
+          const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
+          if (!isComplete) {
+            // Security gatekeeper: do NOT auto-login to dashboard without completed firm details & GST!
+            setActiveView(prev => (prev === 'dashboard' ? 'register' : prev));
+          }
+        }
+      } else {
+        setAuthSessionState(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Routing State (URL-like inside SPA)
-  const [activeView, setActiveView] = useState<string>('dashboard');
+  const [activeView, setActiveView] = useState<string>(() => {
+    const hasSession = localStorage.getItem('maps_supabase_session');
+    const isOnboarded = localStorage.getItem('maps_onboarding_completed') === 'true';
+    if (hasSession && isOnboarded) return 'dashboard';
+    return 'login';
+  });
   const [viewParam, setViewParam] = useState<string | undefined>(undefined);
   const [universalSearch, setUniversalSearch] = useState<string>('');
 
@@ -1460,13 +1589,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
-        firmDetails: FIRM_DETAILS,
+        firmDetails,
+        updateFirmDetails,
         currentUser,
         updateCurrentUser,
         switchUserRole,
         users,
         companySeal,
         setCompanySeal,
+        isAuthenticated,
+        authSession,
+        setAuthSession,
+        logout,
         theme,
         toggleTheme,
         universalSearch,

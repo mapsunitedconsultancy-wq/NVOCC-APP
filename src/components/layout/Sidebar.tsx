@@ -73,8 +73,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     egmFilings,
     shippingInstructions,
     shipments,
-    approvalRequests
+    approvalRequests,
+    theme
   } = useApp();
+
+  const isLight = theme === 'light';
 
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -386,13 +389,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [navSections, searchFilter]);
 
   const renderBadge = (badge: string, color?: string) => {
-    let classes = 'bg-[#16263F] text-[#A8A299] border-[#26395A]';
-    if (color === 'emerald') classes = 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60 font-semibold';
-    if (color === 'amber') classes = 'bg-amber-950/80 text-amber-300 border-amber-800/60 font-semibold';
-    if (color === 'teal') classes = 'bg-teal-950/80 text-teal-300 border-teal-700/60 font-bold';
-    if (color === 'sky') classes = 'bg-sky-950/80 text-sky-300 border-sky-800/60 font-semibold';
-    if (color === 'purple') classes = 'bg-purple-950/80 text-purple-300 border-purple-800/60 font-semibold';
-    if (color === 'rose') classes = 'bg-rose-950/80 text-rose-300 border-rose-800/60 font-semibold';
+    let classes = isLight
+      ? 'bg-slate-100 text-slate-700 border-slate-300 font-semibold'
+      : 'bg-[#16263F] text-[#A8A299] border-[#26395A]';
+    if (color === 'emerald') {
+      classes = isLight
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-semibold'
+        : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60 font-semibold';
+    }
+    if (color === 'amber') {
+      classes = isLight
+        ? 'bg-amber-50 text-amber-800 border-amber-300 font-semibold'
+        : 'bg-amber-950/80 text-amber-300 border-amber-800/60 font-semibold';
+    }
+    if (color === 'teal') {
+      classes = isLight
+        ? 'bg-teal-50 text-teal-700 border-teal-300 font-bold'
+        : 'bg-teal-950/80 text-teal-300 border-teal-700/60 font-bold';
+    }
+    if (color === 'sky') {
+      classes = isLight
+        ? 'bg-sky-50 text-sky-700 border-sky-300 font-semibold'
+        : 'bg-sky-950/80 text-sky-300 border-sky-800/60 font-semibold';
+    }
+    if (color === 'purple') {
+      classes = isLight
+        ? 'bg-purple-50 text-purple-700 border-purple-300 font-semibold'
+        : 'bg-purple-950/80 text-purple-300 border-purple-800/60 font-semibold';
+    }
+    if (color === 'rose') {
+      classes = isLight
+        ? 'bg-rose-50 text-rose-700 border-rose-300 font-semibold'
+        : 'bg-rose-950/80 text-rose-300 border-rose-800/60 font-semibold';
+    }
 
     return (
       <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono uppercase tracking-wider border shrink-0 ${classes}`}>
@@ -515,6 +544,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold uppercase tracking-wider ${
                       activeView === 'dashboard'
                         ? 'bg-slate-950/20 text-slate-950'
+                        : isLight
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                         : 'bg-emerald-950 text-emerald-400 border border-emerald-800/60'
                     }`}
                   >

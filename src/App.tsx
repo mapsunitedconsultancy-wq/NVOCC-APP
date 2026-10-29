@@ -50,12 +50,26 @@ import { ChaTrackerPage } from './pages/ChaTrackerPage';
 import { TruckingJobsPage } from './pages/TruckingJobsPage';
 import { DangerousGoodsPage } from './pages/DangerousGoodsPage';
 
+// Auth Pages
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { isRegistrationComplete } from './services/authService';
+
 // V4 Global Modals
 import { ApprovalQueueModal } from './components/common/ApprovalQueueModal';
 import { AccountSettingsModal } from './components/common/AccountSettingsModal';
 
 const AppContent: React.FC = () => {
-  const { activeView, setActiveView, viewParam, setViewParam, currentUser } = useApp();
+  const {
+    activeView,
+    setActiveView,
+    viewParam,
+    setViewParam,
+    currentUser,
+    isAuthenticated,
+    firmDetails,
+    logout
+  } = useApp();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -107,11 +121,37 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Login Page standalone view
+  if (activeView === 'login') {
+    return (
+      <>
+        <LoginPage
+          onNavigateToRegister={() => setActiveView('register')}
+          onNavigateToLanding={() => setActiveView('landing_page')}
+        />
+        <ToastContainer />
+      </>
+    );
+  }
+
+  // Register Page standalone view (8-digit OTP, Password, Firm details)
+  if (activeView === 'register') {
+    return (
+      <>
+        <RegisterPage
+          onNavigateToLogin={() => setActiveView('login')}
+          onNavigateToLanding={() => setActiveView('landing_page')}
+        />
+        <ToastContainer />
+      </>
+    );
+  }
+
   // Landing Page standalone view
   if (activeView === 'landing_page') {
     return (
       <>
-        <LandingPage onEnterApp={() => setActiveView('dashboard')} />
+        <LandingPage onEnterApp={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')} />
         <ToastContainer />
       </>
     );
@@ -123,7 +163,7 @@ const AppContent: React.FC = () => {
       <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
         <PublicTrackingPage
           initialShipmentId={viewParam || 'MAPS-240342'}
-          onNavigateHome={() => setActiveView('dashboard')}
+          onNavigateHome={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')}
         />
         <ToastContainer />
       </div>
@@ -136,10 +176,43 @@ const AppContent: React.FC = () => {
       <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
         <PublicContainerTrackingView
           containerNumber={viewParam || 'MSKU2345678'}
-          onBack={() => setActiveView('container_control')}
+          onBack={() => setActiveView(isAuthenticated ? 'container_control' : 'login')}
         />
         <ToastContainer />
       </div>
+    );
+  }
+
+  // Route Guard 1: Require authentication for internal ERP views
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage
+          onNavigateToRegister={() => setActiveView('register')}
+          onNavigateToLanding={() => setActiveView('landing_page')}
+        />
+        <ToastContainer />
+      </>
+    );
+  }
+
+  // Route Guard 2: Require Complete Registration & Firm Compliance (GSTIN, Legal Name, Phone)
+  // Prevents partially-registered or unconfigured accounts from accessing internal ERP views!
+  const hasCompletedCompliance = isRegistrationComplete(currentUser, firmDetails);
+  if (!hasCompletedCompliance) {
+    return (
+      <>
+        <RegisterPage
+          initialStep="FIRM"
+          forcedComplianceMessage="Security Warning: Mandatory firm compliance details (Legal Entity Name, GSTIN, and Phone Number) are missing. Complete onboarding to access MAPS NVOCC Pro."
+          onNavigateToLogin={() => {
+            logout();
+            setActiveView('login');
+          }}
+          onNavigateToLanding={() => setActiveView('landing_page')}
+        />
+        <ToastContainer />
+      </>
     );
   }
 
