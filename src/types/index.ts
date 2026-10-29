@@ -12,6 +12,7 @@ export interface User {
   status: 'active' | 'inactive';
   lastLogin: string;
   companySeal?: string;
+  onboardingCompleted?: boolean;
 }
 
 export type ShipmentStatus = 

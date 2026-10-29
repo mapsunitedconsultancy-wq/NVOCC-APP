@@ -249,15 +249,32 @@ export function validateIFSC(ifsc: string): { isValid: boolean; message: string 
   return { isValid: true, message: 'Valid Bank IFSC Code' };
 }
 
-// 10. Phone (IN: +91 then 10 digits starting 6–9)
+// 10. Phone (IN: +91 then 10 digits starting 6–9, or 10 raw digits)
 // Pattern: \+91[6-9]\d{9}
-export function validatePhoneIN(phone: string): { isValid: boolean; message: string } {
-  const clean = phone.trim().replace(/[\s-]/g, '');
-  const regex = /^\+91[6-9]\d{9}$/;
-  if (!regex.test(clean)) {
-    return { isValid: false, message: 'Indian phone number must be in format +91XXXXXXXXXX starting with 6-9 (e.g. +919825012345)' };
+export function normalizePhoneIN(phone: string): string {
+  const clean = phone.trim().replace(/[\s-()]/g, '');
+  if (clean.startsWith('+91')) {
+    return clean;
   }
-  return { isValid: true, message: 'Valid Indian phone number' };
+  if (clean.startsWith('91') && clean.length === 12) {
+    return `+${clean}`;
+  }
+  if (clean.length === 10) {
+    return `+91${clean}`;
+  }
+  return clean.startsWith('+') ? clean : `+91${clean}`;
+}
+
+export function validatePhoneIN(phone: string): { isValid: boolean; message: string; normalized?: string } {
+  const normalized = normalizePhoneIN(phone);
+  const regex = /^\+91[6-9]\d{9}$/;
+  if (!regex.test(normalized)) {
+    return {
+      isValid: false,
+      message: 'Indian mobile number must be 10 digits starting with 6, 7, 8, or 9 (e.g. +91 98250 12345 or 9825012345)'
+    };
+  }
+  return { isValid: true, message: 'Valid Indian mobile phone number', normalized };
 }
 
 // 11. Email (RFC 5322 basic)
