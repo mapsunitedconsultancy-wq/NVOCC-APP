@@ -95,6 +95,7 @@ import {
 
 import { supabase } from '../services/supabase';
 import { formatSupabaseUser, signOutUser, isRegistrationComplete } from '../services/authService';
+import { getViewForPath, getPathForView } from '../utils/router';
 
 export interface ToastMessage {
   id: string;
@@ -135,9 +136,9 @@ interface AppContextType {
 
   // Active View / Route
   activeView: string;
-  setActiveView: (view: string) => void;
+  setActiveView: (view: string | ((prev: string) => string)) => void;
   viewParam?: string;
-  setViewParam: (param?: string) => void;
+  setViewParam: (param?: string | ((prev?: string) => string | undefined)) => void;
 
   // Data & Mutators
   shipments: Shipment[];
@@ -471,14 +472,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Routing State (URL-like inside SPA)
-  const [activeView, setActiveView] = useState<string>(() => {
+  // Routing State with browser URL synchronization (HTML5 History API)
+  const initialRoute = typeof window !== 'undefined' ? getViewForPath(window.location.pathname) : { view: 'dashboard' };
+
+  const [activeView, setActiveViewState] = useState<string>(() => {
+    // If the browser already visited a specific path like /documents, /track, /shipments, etc.
+    if (typeof window !== 'undefined' && window.location.pathname && window.location.pathname !== '/') {
+      return initialRoute.view;
+    }
     const hasSession = localStorage.getItem('maps_supabase_session');
     const isOnboarded = localStorage.getItem('maps_onboarding_completed') === 'true';
     if (hasSession && isOnboarded) return 'dashboard';
     return 'login';
   });
-  const [viewParam, setViewParam] = useState<string | undefined>(undefined);
+  const [viewParam, setViewParamState] = useState<string | undefined>(initialRoute.param);
+
+  // Synchronized route setters: seamlessly updates browser URL bar (e.g. /documents, /shipments)
+  const setActiveView = (action: string | ((prev: string) => string)) => {
+    setActiveViewState(prev => {
+      const nextView = typeof action === 'function' ? action(prev) : action;
+      if (typeof window !== 'undefined') {
+        const targetPath = getPathForView(nextView, viewParam);
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState({ view: nextView, param: viewParam }, '', targetPath);
+        }
+      }
+      return nextView;
+    });
+  };
+
+  const setViewParam = (action?: string | ((prev?: string) => string | undefined)) => {
+    setViewParamState(prev => {
+      const nextParam = typeof action === 'function' ? action(prev) : action;
+      if (typeof window !== 'undefined') {
+        const targetPath = getPathForView(activeView, nextParam);
+        if (window.location.pathname !== targetPath) {
+          window.history.pushState({ view: activeView, param: nextParam }, '', targetPath);
+        }
+      }
+      return nextParam;
+    });
+  };
+
+  // Sync initial URL if at root
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/') {
+      const targetPath = getPathForView(activeView, viewParam);
+      window.history.replaceState({ view: activeView, param: viewParam }, '', targetPath);
+    }
+  }, []);
+
+  // Listen to browser Back and Forward navigation buttons
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const route = getViewForPath(window.location.pathname);
+      setActiveViewState(route.view);
+      setViewParamState(route.param);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const [universalSearch, setUniversalSearch] = useState<string>('');
 
   // Domain Datasets with local storage persistence fallback

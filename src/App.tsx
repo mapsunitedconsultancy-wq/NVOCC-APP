@@ -13,46 +13,33 @@ import { PrintModal } from './components/common/PrintModal';
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { KeyboardShortcutsModal } from './components/common/KeyboardShortcutsModal';
 
-// Pages
-import { DashboardPage } from './pages/DashboardPage';
-import { ShipmentsPage } from './pages/ShipmentsPage';
-import { ShipmentDetailPage } from './pages/ShipmentDetailPage';
-import { CreateShipmentModal } from './pages/CreateShipmentModal';
-import { HblPage } from './pages/HblPage';
-import { CreateHblModal } from './pages/CreateHblModal';
-import { MblPage } from './pages/MblPage';
-import { ConsolidationPage } from './pages/ConsolidationPage';
-import { ContainerControlPage } from './pages/ContainerControlPage';
-import { RateMasterPage } from './pages/RateMasterPage';
-import { QuoteBuilderPage } from './pages/QuoteBuilderPage';
-import { InvoicingPage } from './pages/InvoicingPage';
-import { CreateInvoiceModal } from './pages/CreateInvoiceModal';
-import { PartyMasterPage } from './pages/PartyMasterPage';
-import { AgentAccountingPage } from './pages/AgentAccountingPage';
-import { DocumentVaultPage } from './pages/DocumentVaultPage';
-import { CustomerPortalPage } from './pages/CustomerPortalPage';
-import { PublicTrackingPage } from './pages/PublicTrackingPage';
-import { CommunicationHubPage } from './pages/CommunicationHubPage';
-import { ReportsPage } from './pages/ReportsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { IntelligencePage } from './pages/IntelligencePage';
-import { LandingPage } from './pages/LandingPage';
+// Modular Folder Pages
+import { DashboardPage } from './pages/dashboard';
+import { ShipmentsPage, ShipmentDetailPage, CreateShipmentModal } from './pages/shipments';
+import { HblPage, CreateHblModal } from './pages/hbl';
+import { MblPage } from './pages/mbl';
+import { ConsolidationPage } from './pages/consolidation';
+import { ContainerControlPage } from './pages/container-control';
+import { RateMasterPage, QuoteBuilderPage, QuotationPipelinePage } from './pages/rates-quotes';
+import { InvoicingPage, CreateInvoiceModal } from './pages/invoicing';
+import { PartyMasterPage } from './pages/parties';
+import { AgentAccountingPage } from './pages/accounting';
+import { DocumentVaultPage } from './pages/documents';
+import { CustomerPortalPage } from './pages/customer-portal';
+import { PublicTrackingPage } from './pages/tracking';
+import { CommunicationHubPage } from './pages/communication';
+import { ReportsPage } from './pages/reports';
+import { SettingsPage } from './pages/settings';
+import { IntelligencePage } from './pages/intelligence';
+import { LandingPage } from './pages/landing';
 import { PublicContainerTrackingView } from './components/container-control/PublicContainerTrackingView';
-import { DeliveryOrderPage } from './pages/DeliveryOrderPage';
-import { CreateDeliveryOrderModal } from './pages/CreateDeliveryOrderModal';
-
-// V4 New Modules
-import { ExportManifestPage } from './pages/ExportManifestPage';
-import { ImportManifestPage } from './pages/ImportManifestPage';
-import { ShippingInstructionsPage } from './pages/ShippingInstructionsPage';
-import { QuotationPipelinePage } from './pages/QuotationPipelinePage';
-import { ChaTrackerPage } from './pages/ChaTrackerPage';
-import { TruckingJobsPage } from './pages/TruckingJobsPage';
-import { DangerousGoodsPage } from './pages/DangerousGoodsPage';
+import { DeliveryOrderPage, CreateDeliveryOrderModal } from './pages/delivery-orders';
+import { ExportManifestPage, ImportManifestPage } from './pages/manifests';
+import { ShippingInstructionsPage, ChaTrackerPage } from './pages/customs-cha';
+import { TruckingJobsPage, DangerousGoodsPage } from './pages/transport';
 
 // Auth Pages
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
+import { LoginPage, RegisterPage } from './pages/auth';
 import { isRegistrationComplete } from './services/authService';
 
 // V4 Global Modals
