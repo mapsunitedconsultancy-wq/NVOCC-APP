@@ -94,7 +94,7 @@ import {
 } from '../utils/automationChains';
 
 import { supabase } from '../services/supabase';
-import { formatSupabaseUser, signOutUser, isRegistrationComplete } from '../services/authService';
+import { formatSupabaseUser, signOutUser, isRegistrationComplete, syncUserToDatabase } from '../services/authService';
 import { getViewForPath, getPathForView } from '../utils/router';
 
 export interface ToastMessage {
@@ -214,6 +214,7 @@ interface AppContextType {
 
   // V4 Modules & Engines
   egmFilings: EgmFiling[];
+  setEgmFilings: React.Dispatch<React.SetStateAction<EgmFiling[]>>;
   addEgmFiling: (filing: EgmFiling) => void;
   updateEgmFiling: (id: string, updates: Partial<EgmFiling>) => void;
   fileEgmWithIem: (id: string, iemNumber: string) => void;
@@ -436,6 +437,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (session.user.user_metadata?.firm) {
             updateFirmDetails(session.user.user_metadata.firm);
           }
+          syncUserToDatabase(session.user, session.user.user_metadata?.firm || firmDetails).catch(() => {});
           const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
           if (!isComplete) {
             // Security enforcement: redirect incomplete registration to register step
@@ -455,6 +457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (session.user.user_metadata?.firm) {
             updateFirmDetails(session.user.user_metadata.firm);
           }
+          syncUserToDatabase(session.user, session.user.user_metadata?.firm || firmDetails).catch(() => {});
           const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
           if (!isComplete) {
             // Security gatekeeper: do NOT auto-login to dashboard without completed firm details & GST!
@@ -1260,6 +1263,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return local ? JSON.parse(local) : MOCK_EGM_FILINGS;
   });
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('maps_egm_filings', JSON.stringify(egmFilings));
+    } catch {}
+  }, [egmFilings]);
+
   const addEgmFiling = (filing: EgmFiling) => {
     setEgmFilings(prev => [filing, ...prev]);
     addAuditLog('Created EGM Filing', 'EGM', filing.vesselVoyage, `EGM draft initiated for ${filing.vesselVoyage}`);
@@ -1726,6 +1735,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         density,
         toggleDensity,
         egmFilings,
+        setEgmFilings,
         addEgmFiling,
         updateEgmFiling,
         fileEgmWithIem,
