@@ -481,39 +481,80 @@ export async function saveFirmDetails(
       sessionStorage.removeItem('maps_staged_reg');
     } catch {}
 
-    // 3. Best-effort insert/upsert to PostgreSQL 'organizations' table
+    // 3. Upsert user into public.users and public.tenants in PostgreSQL
     if (isSupabaseConfigured && supabase) {
       try {
-        const orgCode = (normalizedPayload.tradeName || normalizedPayload.legalName || 'MAPS')
-          .replace(/[^A-Za-z0-9]/g, '')
-          .slice(0, 10)
-          .toUpperCase() + '-' + Math.floor(1000 + Math.random() * 9000);
-
-        await supabase.from('organizations').upsert(
-          {
-            code: orgCode,
-            name: normalizedPayload.legalName,
-            gstin: normalizedPayload.gstin,
-            pan: normalizedPayload.pan,
-            iec_code: normalizedPayload.iec || null,
-            state_code: normalizedPayload.gstin.slice(0, 2),
-            settings: {
-              tradeName: normalizedPayload.tradeName,
-              city: normalizedPayload.city,
-              address: normalizedPayload.registeredAddress,
-              phone: normalizedPayload.phone,
-              email: normalizedPayload.email,
-              businessType: normalizedPayload.businessType,
-            },
-          },
-          { onConflict: 'code', ignoreDuplicates: true }
-        );
-      } catch {}
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await syncUserToDatabase(user, normalizedPayload);
+        }
+      } catch (dbSyncErr) {
+        console.warn('public.users database sync notice:', dbSyncErr);
+      }
     }
 
     return { success: true, data: normalizedPayload };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to save firm compliance details' };
+  }
+}
+
+export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+
+/**
+ * Syncs an authenticated Supabase user into the public.users database table.
+ */
+export async function syncUserToDatabase(user: any, firm?: any): Promise<void> {
+  if (!isSupabaseConfigured || !supabase || !user || !user.id) return;
+
+  try {
+    const meta = user.user_metadata || {};
+    const email = user.email || meta.email || '';
+    const name = meta.full_name || user.name || email.split('@')[0] || 'User';
+    const phone = meta.phone || user.phone || firm?.phone || '';
+    const role = meta.role || user.role || 'super_admin';
+
+    // 1. If firm compliance details are present, ensure tenant record exists
+    if (firm && firm.gstin) {
+      const tenantCode = (firm.tradeName || firm.legalName || 'MAPS')
+        .replace(/[^A-Za-z0-9]/g, '')
+        .slice(0, 10)
+        .toUpperCase() || 'MAPS-HQ';
+
+      await supabase.from('tenants').upsert(
+        {
+          id: DEFAULT_TENANT_ID,
+          code: tenantCode,
+          legal_name: firm.legalName || 'MAPS Freight Solutions Pvt Ltd',
+          trade_name: firm.tradeName || firm.legalName || 'MAPS NVOCC PRO',
+          gstin: firm.gstin,
+          pan: firm.pan || firm.gstin.slice(2, 12),
+          iec: firm.iec || null,
+          base_currency: 'INR',
+          is_active: true,
+        },
+        { onConflict: 'id' }
+      );
+    }
+
+    // 2. Upsert into public.users
+    await supabase.from('users').upsert(
+      {
+        id: user.id,
+        tenant_id: DEFAULT_TENANT_ID,
+        email: email,
+        name: name,
+        phone: phone,
+        role: role === 'customer' ? 'customer' : 'super_admin',
+        title: 'Company Administrator',
+        department: 'Operations',
+        status: 'active',
+        last_login: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (err) {
+    console.warn('Sync to public.users notice:', err);
   }
 }
 
@@ -544,6 +585,11 @@ export async function loginWithEmailPassword(
       const meta = user?.user_metadata || {};
       const firm = meta.firm;
       const isOnboardingComplete = Boolean(meta.onboardingCompleted && firm?.legalName && firm?.gstin);
+
+      // Sync user profile to public.users on successful login
+      if (user) {
+        syncUserToDatabase(user, firm).catch(() => {});
+      }
 
       return {
         success: true,

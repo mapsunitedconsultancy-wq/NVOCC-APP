@@ -1,0 +1,26 @@
+{
+  "name": "maps-egm-filing-module",
+  "version": "1.0.0",
+  "description": "Standalone Indian Customs ICEGATE Export General Manifest (EGM) Filing Module for NVOCC & Freight Forwarding applications.",
+  "main": "index.ts",
+  "module": "index.ts",
+  "types": "index.ts",
+  "keywords": [
+    "egm",
+    "export-general-manifest",
+    "icegate",
+    "indian-customs",
+    "nvocc",
+    "freight-forwarding",
+    "iem",
+    "dgft",
+    "logistics"
+  ],
+  "author": "MAPS Setu Logistics Engineering",
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "lucide-react": ">=0.300.0"
+  }
+}
