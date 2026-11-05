@@ -47,14 +47,17 @@ export type RegistrationStep = 'CONTACT' | 'OTP' | 'PASSWORD' | 'FIRM' | 'SUCCES
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({
   onNavigateToLogin,
-  onNavigateToLanding,
   initialStep = 'CONTACT',
   forcedComplianceMessage
 }) => {
-  const { showToast, setAuthSession, updateCurrentUser, updateFirmDetails, setActiveView, currentUser, firmDetails } = useApp();
+  const { showToast, setAuthSession, updateCurrentUser, updateFirmDetails, setActiveView, currentUser, firmDetails, isAuthenticated } = useApp();
 
-  // Current registration flow step
-  const [currentStep, setCurrentStep] = useState<RegistrationStep>(initialStep);
+  // Current registration flow step (if user is already signed in, skip OTP and jump directly to Firm Setup)
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
+    if (initialStep !== 'CONTACT') return initialStep;
+    if (isAuthenticated) return 'FIRM';
+    return 'CONTACT';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(forcedComplianceMessage || null);
   const [showSignInRedirect, setShowSignInRedirect] = useState(false);
@@ -233,18 +236,22 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
-    const fullCode = otpDigits.join('');
-    if (fullCode.length !== 8) {
-      setErrorMessage('Please enter the complete 8-digit verification code.');
+    const rawDigits = otpDigits.join('');
+    const codeToVerify = (rawDigits.length === 6 || rawDigits.length === 8)
+      ? rawDigits
+      : (otpDigits.slice(0, 6).join('').length === 6 ? otpDigits.slice(0, 6).join('') : rawDigits);
+
+    if (codeToVerify.length !== 6 && codeToVerify.length !== 8) {
+      setErrorMessage('Please enter the complete 6-digit or 8-digit verification code.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await verifyRegistrationEmailOtp(email, fullCode);
+      const result = await verifyRegistrationEmailOtp(email, codeToVerify);
 
       if (!result.success || !result.data) {
-        setErrorMessage(result.error || 'Invalid or expired 8-digit OTP code');
+        setErrorMessage(result.error || 'Invalid or expired OTP verification code');
         setIsLoading(false);
         return;
       }
@@ -502,11 +509,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
       {/* Top Header */}
       <header className="px-6 py-5 flex items-center justify-between border-b border-[#15233C]/80 bg-[#0A1628]/80 backdrop-blur-md relative z-10">
-        <div
-          onClick={onNavigateToLanding}
-          className="flex items-center gap-3 cursor-pointer group"
-        >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#E88B2A] to-[#FFB356] flex items-center justify-center font-black text-slate-950 shadow-md shadow-[#E88B2A]/20 group-hover:scale-105 transition-transform">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#E88B2A] to-[#FFB356] flex items-center justify-center font-black text-slate-950 shadow-md shadow-[#E88B2A]/20">
             <Ship className="w-5 h-5 text-slate-950" />
           </div>
           <div>
@@ -717,7 +721,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   Verify Email Address
                 </h2>
                 <p className="text-xs text-[#A8A299] mt-1">
-                  8-digit verification code delivered to your registered email: <strong className="text-amber-400 font-mono">{email}</strong>
+                  Verification code delivered to your registered email: <strong className="text-amber-400 font-mono">{email}</strong>
                 </p>
                 <div className="flex items-center justify-center gap-2 mt-1">
                   <span className="text-[11px] text-[#A8A299]">
@@ -818,7 +822,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isLoading || otpDigits.join('').length !== 8}
+                    disabled={isLoading || (otpDigits.join('').length !== 6 && otpDigits.join('').length !== 8)}
                     className="flex-1 py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-[#E88B2A] to-[#D47B1C] hover:from-[#FF9A3C] hover:to-[#E88B2A] text-slate-950 flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#E88B2A]/20 cursor-pointer disabled:opacity-50"
                   >
                     {isLoading ? (
