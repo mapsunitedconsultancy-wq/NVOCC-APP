@@ -31,7 +31,6 @@ import { CommunicationHubPage } from './pages/communication';
 import { ReportsPage } from './pages/reports';
 import { SettingsPage } from './pages/settings';
 import { IntelligencePage } from './pages/intelligence';
-import { LandingPage } from './pages/landing';
 import { PublicContainerTrackingView } from './components/container-control/PublicContainerTrackingView';
 import { DeliveryOrderPage, CreateDeliveryOrderModal } from './pages/delivery-orders';
 import { ExportManifestPage, ImportManifestPage } from './pages/manifests';
@@ -108,76 +107,50 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Login Page standalone view
-  if (activeView === 'login') {
-    return (
-      <>
-        <LoginPage
-          onNavigateToRegister={() => setActiveView('register')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
-        <ToastContainer />
-      </>
-    );
-  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SECURED ROUTE GUARDS & PUBLIC ROUTES
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  // Register Page standalone view (8-digit OTP, Password, Firm details)
-  if (activeView === 'register') {
-    return (
-      <>
-        <RegisterPage
-          onNavigateToLogin={() => setActiveView('login')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
-        <ToastContainer />
-      </>
-    );
-  }
-
-  // Landing Page standalone view
-  if (activeView === 'landing_page') {
-    return (
-      <>
-        <LandingPage onEnterApp={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')} />
-        <ToastContainer />
-      </>
-    );
-  }
-
-  // Public Tracking standalone view
-  if (activeView === 'public_tracking') {
-    return (
-      <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
-        <PublicTrackingPage
-          initialShipmentId={viewParam || 'MAPS-240342'}
-          onNavigateHome={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')}
-        />
-        <ToastContainer />
-      </div>
-    );
-  }
-
-  // Public Container Control Tracking view (/ccontrol/[container])
-  if (activeView === 'ccontrol_public') {
-    return (
-      <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
-        <PublicContainerTrackingView
-          containerNumber={viewParam || 'MSKU2345678'}
-          onBack={() => setActiveView(isAuthenticated ? 'container_control' : 'login')}
-        />
-        <ToastContainer />
-      </div>
-    );
-  }
-
-  // Route Guard 1: Require authentication for internal ERP views
+  // When unauthenticated: only allow /login, /register, and public tracking
   if (!isAuthenticated) {
+    if (activeView === 'register') {
+      return (
+        <>
+          <RegisterPage onNavigateToLogin={() => setActiveView('login')} />
+          <ToastContainer />
+        </>
+      );
+    }
+
+    if (activeView === 'public_tracking') {
+      return (
+        <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
+          <PublicTrackingPage
+            initialShipmentId={viewParam || 'MAPS-240342'}
+            onNavigateHome={() => setActiveView('login')}
+          />
+          <ToastContainer />
+        </div>
+      );
+    }
+
+    if (activeView === 'ccontrol_public') {
+      return (
+        <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
+          <PublicContainerTrackingView
+            containerNumber={viewParam || 'MSKU2345678'}
+            onBack={() => setActiveView('login')}
+          />
+          <ToastContainer />
+        </div>
+      );
+    }
+
+    // Any secured route (e.g. /dashboard, /shipments, etc.) accessed while unauthenticated
+    // immediately renders the dedicated /login route
     return (
       <>
-        <LoginPage
-          onNavigateToRegister={() => setActiveView('register')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
+        <LoginPage onNavigateToRegister={() => setActiveView('register')} />
         <ToastContainer />
       </>
     );
@@ -196,7 +169,6 @@ const AppContent: React.FC = () => {
             logout();
             setActiveView('login');
           }}
-          onNavigateToLanding={() => setActiveView('landing_page')}
         />
         <ToastContainer />
       </>
