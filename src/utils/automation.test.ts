@@ -162,12 +162,12 @@ test('Shipment Creation Chain auto-generates linked HBL and Invoice', () => {
 
   const chainResult = executeShipmentCreationChain(sampleShipment, []);
   assert.ok(chainResult.createdHbl);
-  assert.equal(chainResult.createdHbl.shipmentId, 'MAPS-240399');
-  assert.equal(chainResult.createdHbl.shipperName, 'Krishna Ceramics Ltd');
+  assert.equal(chainResult.createdHbl?.shipmentId, 'MAPS-240399');
+  assert.equal(chainResult.createdHbl?.shipperName, 'Krishna Ceramics Ltd');
 
   assert.ok(chainResult.createdInvoice);
-  assert.equal(chainResult.createdInvoice.shipmentId, 'MAPS-240399');
-  assert.equal(chainResult.createdInvoice.subtotal, 175350);
+  assert.equal(chainResult.createdInvoice?.shipmentId, 'MAPS-240399');
+  assert.equal(chainResult.createdInvoice?.subtotal, 175350);
 
   assert.equal(chainResult.createdDocuments?.length, 3);
   assert.equal(chainResult.createdCommunications?.length, 2);

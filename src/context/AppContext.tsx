@@ -339,6 +339,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // ══════════════════════════════════════════════════════════════════════════
+  // SUPABASE AUTHENTICATION STATE
+  // Declared before routing to guarantee zero TDZ issues across all views
+  // ══════════════════════════════════════════════════════════════════════════
+  const [authSession, setAuthSessionState] = useState<any>(() => {
+    const saved = localStorage.getItem('maps_supabase_session');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem('maps_supabase_session'));
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
   // AUDIT LOGGING ENGINE
   // Declared early so all business transactions can record audit trails safely
   // ══════════════════════════════════════════════════════════════════════════
@@ -377,15 +395,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!hasSession && initialRoute.view !== 'public_tracking' && initialRoute.view !== 'ccontrol_public' && initialRoute.view !== 'register' && initialRoute.view !== 'login') {
         return 'login';
       }
-      // If already authenticated and visiting /login or /register, redirect to secured /dashboard
-      if (hasSession && (initialRoute.view === 'login' || initialRoute.view === 'register')) {
-        return 'dashboard';
-      }
       return initialRoute.view;
     }
 
-    // Root path ('/'): route to dashboard if logged in, otherwise login
-    return hasSession ? 'dashboard' : 'login';
+    // By default, every user comes to the login page only
+    return 'login';
   });
 
   const [viewParam, setViewParamState] = useState<string | undefined>(initialRoute.param);
@@ -526,21 +540,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Supabase Authentication State
-  const [authSession, setAuthSessionState] = useState<any>(() => {
-    const saved = localStorage.getItem('maps_supabase_session');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
-    }
-    return null;
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('maps_supabase_session'));
-  });
-
   // Route Guard Effect: Keeps secured routes strictly locked
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -551,12 +550,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveView('login');
       }
     } else {
-      // When authenticated, prevent staying on /login or /register
-      if (activeView === 'login' || activeView === 'register') {
-        setActiveView('dashboard');
+      // When authenticated:
+      // If user is on /login and already fully registered, redirect to dashboard
+      if (activeView === 'login') {
+        const isRegistered = isRegistrationComplete(currentUser, firmDetails);
+        if (isRegistered) {
+          setActiveView('dashboard');
+        }
       }
+      // CRITICAL: When activeView === 'register', NEVER redirect away automatically!
+      // The user is actively filling out the registration form (Password, Firm Details).
+      // They will be moved to the dashboard only upon completing registration.
     }
-  }, [isAuthenticated, activeView, setActiveView]);
+  }, [isAuthenticated, activeView, setActiveView, currentUser, firmDetails]);
 
   const setAuthSession = (session: any, authUser?: any) => {
     setAuthSessionState(session);

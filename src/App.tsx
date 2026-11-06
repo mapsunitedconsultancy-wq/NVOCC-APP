@@ -111,43 +111,48 @@ const AppContent: React.FC = () => {
   // SECURED ROUTE GUARDS & PUBLIC ROUTES
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // When unauthenticated: only allow /login, /register, and public tracking
+  // 1. Dedicated Public Routes (Shipment tracking & Container tracking)
+  if (activeView === 'public_tracking') {
+    return (
+      <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
+        <PublicTrackingPage
+          initialShipmentId={viewParam || 'MAPS-240342'}
+          onNavigateHome={() => setActiveView('login')}
+        />
+        <ToastContainer />
+      </div>
+    );
+  }
+
+  if (activeView === 'ccontrol_public') {
+    return (
+      <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
+        <PublicContainerTrackingView
+          containerNumber={viewParam || 'MSKU2345678'}
+          onBack={() => setActiveView('login')}
+        />
+        <ToastContainer />
+      </div>
+    );
+  }
+
+  // 2. Active Registration Route
+  // MUST ALWAYS render RegisterPage when on /register (even when Supabase session gets created at Step 2)
+  // The user must complete Step 3 (Set Password) and Step 4 (Add Firm Details) before reaching Dashboard!
+  if (activeView === 'register') {
+    return (
+      <>
+        <RegisterPage onNavigateToLogin={() => {
+          logout();
+          setActiveView('login');
+        }} />
+        <ToastContainer />
+      </>
+    );
+  }
+
+  // 3. When Unauthenticated: Lock down all internal routes and render /login
   if (!isAuthenticated) {
-    if (activeView === 'register') {
-      return (
-        <>
-          <RegisterPage onNavigateToLogin={() => setActiveView('login')} />
-          <ToastContainer />
-        </>
-      );
-    }
-
-    if (activeView === 'public_tracking') {
-      return (
-        <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
-          <PublicTrackingPage
-            initialShipmentId={viewParam || 'MAPS-240342'}
-            onNavigateHome={() => setActiveView('login')}
-          />
-          <ToastContainer />
-        </div>
-      );
-    }
-
-    if (activeView === 'ccontrol_public') {
-      return (
-        <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
-          <PublicContainerTrackingView
-            containerNumber={viewParam || 'MSKU2345678'}
-            onBack={() => setActiveView('login')}
-          />
-          <ToastContainer />
-        </div>
-      );
-    }
-
-    // Any secured route (e.g. /dashboard, /shipments, etc.) accessed while unauthenticated
-    // immediately renders the dedicated /login route
     return (
       <>
         <LoginPage onNavigateToRegister={() => setActiveView('register')} />
@@ -156,15 +161,15 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Route Guard 2: Require Complete Registration & Firm Compliance (GSTIN, Legal Name, Phone)
-  // Prevents partially-registered or unconfigured accounts from accessing internal ERP views!
+  // 4. Authenticated Users: Check if the user is already registered (onboarding completed + firm details)
+  // When a user is already registered, only then it should move towards the dashboard!
   const hasCompletedCompliance = isRegistrationComplete(currentUser, firmDetails);
   if (!hasCompletedCompliance) {
     return (
       <>
         <RegisterPage
           initialStep="FIRM"
-          forcedComplianceMessage="Security Warning: Mandatory firm compliance details (Legal Entity Name, GSTIN, and Phone Number) are missing. Complete onboarding to access MAPS NVOCC Pro."
+          forcedComplianceMessage="Mandatory Firm Onboarding: Please provide your company legal entity name, GSTIN, and registered office to activate your workspace."
           onNavigateToLogin={() => {
             logout();
             setActiveView('login');

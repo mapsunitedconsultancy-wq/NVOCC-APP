@@ -112,14 +112,61 @@ export async function checkIfUserAlreadyExists(
 
 /**
  * Check if a user and firm have satisfied registration requirements.
- * Permits full workspace access for authenticated users across local and hosted environments.
+ * A user is considered already registered ONLY if:
+ * 1. An authenticated user exists
+ * 2. Onboarding is explicitly marked complete (in user metadata or local storage)
+ * 3. A valid firm profile with a valid 15-character GSTIN and Legal Entity Name exists
  */
 export function isRegistrationComplete(
   user: User | null,
   firm?: FirmDetailsPayload | typeof FIRM_DETAILS | null
 ): boolean {
   if (!user) return false;
-  return true;
+
+  // If in the middle of active registration in this browser session, never treat as already registered
+  if (typeof sessionStorage !== 'undefined') {
+    const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+    if (stagedRaw) {
+      try {
+        const staged = JSON.parse(stagedRaw);
+        if (!staged.onboardingCompleted) {
+          return false;
+        }
+      } catch {}
+    }
+  }
+
+  // Allow offline demo mock admin when Supabase is not active
+  if (!isSupabaseConfigured && user.id === 'user-1' && user.email === 'amandana3094@gmail.com') {
+    return true;
+  }
+
+  // Check user onboarding flags
+  const meta = (user as any).user_metadata || {};
+  const metaOnboarded = meta.onboardingCompleted === true;
+  const userObjOnboarded = (user as any).onboardingCompleted === true;
+  const storageOnboarded = typeof window !== 'undefined' && localStorage.getItem('maps_onboarding_completed') === 'true';
+
+  const isOnboarded = metaOnboarded || userObjOnboarded || storageOnboarded;
+  if (!isOnboarded) {
+    return false;
+  }
+
+  // Check firm compliance details
+  const currentFirm = firm || meta.firm || (() => {
+    try {
+      const raw = localStorage.getItem('maps_firm_details');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const gstin = currentFirm?.gstin || '';
+  const legalName = currentFirm?.legalName || '';
+  const hasValidFirm = Boolean(legalName && legalName.trim().length >= 3 && gstin && gstin.trim().length === 15);
+
+  return Boolean(isOnboarded && hasValidFirm);
 }
 
 /**
@@ -179,12 +226,10 @@ export async function sendRegistrationEmailOtp(
   // 5. Dispatch OTP to the Official Email via Supabase
   if (isSupabaseConfigured && supabase) {
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : undefined;
       const { data, error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: redirectUrl,
           data: {
             full_name: cleanName,
             phone: normalizedPhone,
@@ -195,11 +240,16 @@ export async function sendRegistrationEmailOtp(
       });
 
       if (error) {
-        return { success: false, error: error.message };
+        console.error('Supabase signInWithOtp error:', error);
+        return {
+          success: false,
+          error: error.message || 'Failed to dispatch verification email via Supabase (HTTP 500).'
+        };
       }
 
       return { success: true, data: { email: cleanEmail } };
     } catch (err: any) {
+      console.error('Supabase signInWithOtp exception:', err);
       return { success: false, error: err?.message || 'Failed to dispatch verification email.' };
     }
   }
@@ -481,9 +531,15 @@ export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 
 /**
  * Syncs an authenticated Supabase user into the public.users database table.
+ * Ensures the target tenant exists to guarantee zero foreign-key constraint failures.
  */
-export async function syncUserToDatabase(user: any, firm?: any): Promise<void> {
-  if (!isSupabaseConfigured || !supabase || !user || !user.id) return;
+export async function syncUserToDatabase(
+  user: any,
+  firm?: any
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!isSupabaseConfigured || !supabase || !user || !user.id) {
+    return { success: false, error: 'Supabase client not configured or user ID missing' };
+  }
 
   try {
     const meta = user.user_metadata || {};
@@ -492,47 +548,103 @@ export async function syncUserToDatabase(user: any, firm?: any): Promise<void> {
     const phone = meta.phone || user.phone || firm?.phone || '';
     const role = meta.role || user.role || 'super_admin';
 
-    // 1. If firm compliance details are present, ensure tenant record exists
-    if (firm && firm.gstin) {
-      const tenantCode = (firm.tradeName || firm.legalName || 'MAPS')
+    // 1. Identify target tenant ID (lookup existing tenant or fallback to DEFAULT_TENANT_ID)
+    let activeTenantId = DEFAULT_TENANT_ID;
+    const { data: existingTenants, error: tenantQueryErr } = await supabase
+      .from('tenants')
+      .select('id, code')
+      .limit(1);
+
+    if (tenantQueryErr) {
+      console.warn('Tenants query notice:', tenantQueryErr.message);
+    }
+
+    if (existingTenants && existingTenants.length > 0) {
+      activeTenantId = existingTenants[0].id;
+      // If firm compliance details are present, update existing tenant
+      if (firm && (firm.legalName || firm.gstin)) {
+        const { error: updateTenantErr } = await supabase
+          .from('tenants')
+          .update({
+            legal_name: firm.legalName || 'MAPS Freight Solutions Pvt Ltd',
+            trade_name: firm.tradeName || firm.legalName || 'MAPS NVOCC PRO',
+            gstin: firm.gstin,
+            pan: firm.pan || (firm.gstin ? firm.gstin.slice(2, 12) : null),
+            iec: firm.iec || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', activeTenantId);
+
+        if (updateTenantErr) {
+          console.warn('Tenant update notice:', updateTenantErr.message);
+        }
+      }
+    } else {
+      // Create primary tenant
+      const tenantCode = (firm?.tradeName || firm?.legalName || 'MAPS')
         .replace(/[^A-Za-z0-9]/g, '')
         .slice(0, 10)
         .toUpperCase() || 'MAPS-HQ';
 
-      await supabase.from('tenants').upsert(
+      const { error: insertTenantErr } = await supabase.from('tenants').upsert(
         {
           id: DEFAULT_TENANT_ID,
           code: tenantCode,
-          legal_name: firm.legalName || 'MAPS Freight Solutions Pvt Ltd',
-          trade_name: firm.tradeName || firm.legalName || 'MAPS NVOCC PRO',
-          gstin: firm.gstin,
-          pan: firm.pan || firm.gstin.slice(2, 12),
-          iec: firm.iec || null,
+          legal_name: firm?.legalName || 'MAPS Freight Solutions Pvt Ltd',
+          trade_name: firm?.tradeName || firm?.legalName || 'MAPS NVOCC PRO',
+          gstin: firm?.gstin || '24AARCM6698J1ZK',
+          pan: firm?.pan || (firm?.gstin ? firm.gstin.slice(2, 12) : 'AARCM6698J'),
+          iec: firm?.iec || null,
           base_currency: 'INR',
           is_active: true,
         },
         { onConflict: 'id' }
       );
+
+      if (insertTenantErr) {
+        console.warn('Tenant insert notice:', insertTenantErr.message);
+      }
     }
 
-    // 2. Upsert into public.users
-    await supabase.from('users').upsert(
-      {
-        id: user.id,
-        tenant_id: DEFAULT_TENANT_ID,
-        email: email,
-        name: name,
-        phone: phone,
-        role: role === 'customer' ? 'customer' : 'super_admin',
-        title: 'Company Administrator',
-        department: 'Operations',
-        status: 'active',
-        last_login: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
-  } catch (err) {
-    console.warn('Sync to public.users notice:', err);
+    // 2. Upsert user into public.users with complete profile fields
+    const firmName = firm?.legalName || firm?.firm_name || firm?.tradeName || null;
+    const gstNumber = firm?.gstin || firm?.gst_number || null;
+    const contactPerson = firm?.contact_person || name || meta.full_name || 'Administrator';
+
+    const userPayload = {
+      id: user.id,
+      tenant_id: activeTenantId,
+      email: email,
+      name: name,
+      contact_person: contactPerson,
+      firm_name: firmName,
+      company_name: firmName,
+      phone: phone || null,
+      gst_number: gstNumber,
+      plan: firm?.plan || 'demo',
+      role: role === 'customer' ? 'customer' : 'super_admin',
+      title: meta.title || (role === 'super_admin' ? 'Managing Director / Super Admin' : 'Operations Executive'),
+      department: meta.department || 'Executive Management',
+      avatar: name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'AD',
+      status: 'active',
+      last_login: new Date().toISOString(),
+    };
+
+    const { data: savedUser, error: userError } = await supabase
+      .from('users')
+      .upsert(userPayload, { onConflict: 'id' })
+      .select();
+
+    if (userError) {
+      console.error('Failed to upsert user in public.users table:', userError);
+      return { success: false, error: userError.message };
+    }
+
+    console.log('Successfully saved user into public.users:', savedUser);
+    return { success: true, data: savedUser };
+  } catch (err: any) {
+    console.error('syncUserToDatabase exception:', err);
+    return { success: false, error: err?.message || 'Database sync exception' };
   }
 }
 
@@ -627,13 +739,11 @@ export async function sendPasswordResetOtp(email: string): Promise<AuthResult> {
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : undefined;
-      const { data, error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: redirectUrl,
-      });
+      const { data, error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
 
       if (error) {
-        return { success: false, error: error.message };
+        console.error('Supabase resetPasswordForEmail error:', error);
+        return { success: false, error: error.message || 'Failed to dispatch password reset email (HTTP 500).' };
       }
 
       return { success: true, data };
@@ -783,4 +893,101 @@ export function formatSupabaseUser(authUser: any): User {
     lastLogin: new Date().toISOString(),
     onboardingCompleted: Boolean(meta.onboardingCompleted),
   };
+}
+
+/**
+ * Direct Profile Query helper: GET /api/auth/me equivalent
+ * Queries public.users for the authenticated user's profile
+ */
+export async function getMe(): Promise<{ success: boolean; data?: any; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+
+  try {
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
+      return { success: false, error: authErr?.message || 'Unauthorized: No active session' };
+    }
+
+    const { data: profile, error: dbErr } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (dbErr) {
+      return { success: false, error: dbErr.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        id: user.id,
+        email: user.email,
+        ...profile,
+        user_metadata: user.user_metadata,
+      }
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error fetching user profile' };
+  }
+}
+
+/**
+ * Direct Profile Update helper: PATCH /api/auth/profile equivalent
+ * Upserts profile details into public.users and user metadata
+ */
+export async function updateProfile(profileData: {
+  firm_name?: string;
+  company_name?: string;
+  phone?: string;
+  gst_number?: string;
+  contact_person?: string;
+  plan?: string;
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+
+  try {
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
+      return { success: false, error: authErr?.message || 'Unauthorized' };
+    }
+
+    const firmName = profileData.firm_name || profileData.company_name || '';
+    const gstNumber = profileData.gst_number || '';
+    const contactPerson = profileData.contact_person || '';
+    const phone = profileData.phone || '';
+
+    // Update Supabase Auth user metadata
+    await supabase.auth.updateUser({
+      data: {
+        firm: {
+          legalName: firmName,
+          tradeName: firmName,
+          gstin: gstNumber,
+          phone: phone,
+        },
+        full_name: contactPerson,
+        phone: phone,
+        onboardingCompleted: Boolean(firmName && gstNumber),
+      }
+    });
+
+    // Update public.users table
+    const result = await syncUserToDatabase(user, {
+      legalName: firmName,
+      tradeName: firmName,
+      gstin: gstNumber,
+      phone: phone,
+      contact_person: contactPerson,
+      plan: profileData.plan || 'demo',
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, data: result.data };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error updating profile' };
+  }
 }
