@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   User,
   UserRole,
@@ -296,7 +296,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // User & RBAC
+  // ══════════════════════════════════════════════════════════════════════════
+  // CORE UTILITY STATE (Toasts & Notification Engine)
+  // Declared first so all downstream functions and callbacks can safely invoke showToast
+  // ══════════════════════════════════════════════════════════════════════════
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((type: ToastMessage['type'], title: string, description?: string) => {
+    const id = Date.now().toString() + Math.random().toString().slice(2, 5);
+    setToasts(prev => [...prev, { id, type, title, description }]);
+    setTimeout(() => {
+      removeToast(id);
+    }, 4500);
+  }, [removeToast]);
+
+  // Print Document Modal State
+  const [activePrintDoc, setActivePrintDoc] = useState<{ type: 'HBL' | 'MBL' | 'DO' | 'INVOICE' | 'QUOTE' | 'MANIFEST' | 'STATEMENT' | 'DGD' | 'ARRIVAL_NOTICE' | 'VGM' | 'COVER_NOTE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'; data: any } | null>(null);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // USER & RBAC STATE
+  // ══════════════════════════════════════════════════════════════════════════
   const [users] = useState<User[]>(MOCK_USERS);
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const savedUser = localStorage.getItem('maps_current_user');
@@ -314,6 +337,143 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return MOCK_USERS[0]; // Aman Dana (Super Admin)
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUPABASE AUTHENTICATION STATE
+  // Declared before routing to guarantee zero TDZ issues across all views
+  // ══════════════════════════════════════════════════════════════════════════
+  const [authSession, setAuthSessionState] = useState<any>(() => {
+    const saved = localStorage.getItem('maps_supabase_session');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem('maps_supabase_session'));
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // AUDIT LOGGING ENGINE
+  // Declared early so all business transactions can record audit trails safely
+  // ══════════════════════════════════════════════════════════════════════════
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(() => {
+    const local = localStorage.getItem('maps_audit');
+    return local ? JSON.parse(local) : MOCK_AUDIT_LOGS;
+  });
+
+  const addAuditLog = useCallback((action: string, module: string, entityId: string, details: string) => {
+    const now = new Date();
+    const formatted = `${now.getDate()} Oct 2026 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const item: AuditLogItem = {
+      id: 'aud-' + Date.now(),
+      timestamp: formatted,
+      user: currentUser?.name || 'System User',
+      action,
+      module,
+      entityId,
+      details
+    };
+    setAuditLogs(prev => [item, ...prev]);
+  }, [currentUser?.name]);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ROUTING & BROWSER URL SYNCHRONIZATION (HTML5 History API)
+  // Dedicated routes: /login, /register, and secured /dashboard
+  // ══════════════════════════════════════════════════════════════════════════
+  const initialRoute = typeof window !== 'undefined' ? getViewForPath(window.location.pathname) : { view: 'login' };
+
+  const [activeView, setActiveViewState] = useState<string>(() => {
+    const hasSession = typeof window !== 'undefined' && Boolean(localStorage.getItem('maps_supabase_session'));
+
+    // Parameterized or explicit paths
+    if (typeof window !== 'undefined' && window.location.pathname && window.location.pathname !== '/') {
+      // SECURED ROUTE GUARD: If unauthenticated, redirect /dashboard and internal views to /login
+      if (!hasSession && initialRoute.view !== 'public_tracking' && initialRoute.view !== 'ccontrol_public' && initialRoute.view !== 'register' && initialRoute.view !== 'login') {
+        return 'login';
+      }
+      return initialRoute.view;
+    }
+
+    // By default, every user comes to the login page only
+    return 'login';
+  });
+
+  const [viewParam, setViewParamState] = useState<string | undefined>(initialRoute.param);
+  const isPopStateRef = useRef(false);
+
+  const setActiveView = useCallback((action: string | ((prev: string) => string)) => {
+    setActiveViewState(prev => {
+      const nextView = typeof action === 'function' ? action(prev) : action;
+      if (nextView !== prev && nextView !== 'shipments' && nextView !== 'public_tracking' && nextView !== 'ccontrol_public') {
+        setViewParamState(undefined);
+      }
+      return nextView;
+    });
+  }, []);
+
+  const setViewParam = useCallback((action?: string | ((prev?: string) => string | undefined)) => {
+    setViewParamState(prev => (typeof action === 'function' ? action(prev) : action));
+  }, []);
+
+  // Sync browser URL whenever activeView or viewParam changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false;
+      return;
+    }
+
+    const targetPath = getPathForView(activeView, viewParam);
+    if (window.location.pathname !== targetPath) {
+      if (window.location.pathname === '/' || window.location.pathname === '') {
+        window.history.replaceState({ view: activeView, param: viewParam }, '', targetPath);
+      } else {
+        window.history.pushState({ view: activeView, param: viewParam }, '', targetPath);
+      }
+    }
+  }, [activeView, viewParam]);
+
+  // Listen to browser Back and Forward navigation buttons
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const route = getViewForPath(window.location.pathname);
+      const hasSession = Boolean(localStorage.getItem('maps_supabase_session'));
+
+      // If user presses back button to an internal route while signed out:
+      if (!hasSession && route.view !== 'login' && route.view !== 'register' && route.view !== 'public_tracking' && route.view !== 'ccontrol_public') {
+        isPopStateRef.current = true;
+        setActiveViewState('login');
+        setViewParamState(undefined);
+        window.history.replaceState({ view: 'login' }, '', '/login');
+        return;
+      }
+
+      // If user presses back button to /login while signed in:
+      if (hasSession && (route.view === 'login' || route.view === 'register')) {
+        isPopStateRef.current = true;
+        setActiveViewState('dashboard');
+        setViewParamState(undefined);
+        window.history.replaceState({ view: 'dashboard' }, '', '/dashboard');
+        return;
+      }
+
+      isPopStateRef.current = true;
+      setActiveViewState(route.view);
+      setViewParamState(route.param);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const [universalSearch, setUniversalSearch] = useState<string>('');
 
   const updateCurrentUser = (updates: Partial<User>) => {
     setCurrentUser(prev => {
@@ -380,20 +540,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Supabase Authentication State
-  const [authSession, setAuthSessionState] = useState<any>(() => {
-    const saved = localStorage.getItem('maps_supabase_session');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
-    }
-    return null;
-  });
+  // Route Guard Effect: Keeps secured routes strictly locked
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('maps_supabase_session'));
-  });
+    if (!isAuthenticated) {
+      // When unauthenticated, internal routes must be redirected to /login
+      if (activeView !== 'login' && activeView !== 'register' && activeView !== 'public_tracking' && activeView !== 'ccontrol_public') {
+        setActiveView('login');
+      }
+    } else {
+      // When authenticated:
+      // If user is on /login and already fully registered, redirect to dashboard
+      if (activeView === 'login') {
+        const isRegistered = isRegistrationComplete(currentUser, firmDetails);
+        if (isRegistered) {
+          setActiveView('dashboard');
+        }
+      }
+      // CRITICAL: When activeView === 'register', NEVER redirect away automatically!
+      // The user is actively filling out the registration form (Password, Firm Details).
+      // They will be moved to the dashboard only upon completing registration.
+    }
+  }, [isAuthenticated, activeView, setActiveView, currentUser, firmDetails]);
 
   const setAuthSession = (session: any, authUser?: any) => {
     setAuthSessionState(session);
@@ -416,9 +585,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = async () => {
-    await signOutUser();
+    try {
+      await signOutUser();
+    } catch (e) {
+      console.warn('Sign out error:', e);
+    }
     setAuthSession(null);
     setIsAuthenticated(false);
+    localStorage.removeItem('maps_supabase_session');
+    localStorage.removeItem('maps_current_user');
+    localStorage.removeItem('maps_onboarding_completed');
     setActiveView('login');
     showToast('info', 'Signed Out', 'You have been securely signed out of your workspace.');
   };
@@ -438,12 +614,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             updateFirmDetails(session.user.user_metadata.firm);
           }
           syncUserToDatabase(session.user, session.user.user_metadata?.firm || firmDetails).catch(() => {});
-          const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
-          if (!isComplete) {
-            // Security enforcement: redirect incomplete registration to register step
-            setActiveView(prev => (prev === 'dashboard' ? 'register' : prev));
-          }
         }
+      } else {
+        setAuthSessionState(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem('maps_supabase_session');
       }
     });
 
@@ -458,15 +633,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             updateFirmDetails(session.user.user_metadata.firm);
           }
           syncUserToDatabase(session.user, session.user.user_metadata?.firm || firmDetails).catch(() => {});
-          const isComplete = isRegistrationComplete(formatted, session.user.user_metadata?.firm || firmDetails);
-          if (!isComplete) {
-            // Security gatekeeper: do NOT auto-login to dashboard without completed firm details & GST!
-            setActiveView(prev => (prev === 'dashboard' ? 'register' : prev));
-          }
         }
       } else {
         setAuthSessionState(null);
         setIsAuthenticated(false);
+        localStorage.removeItem('maps_supabase_session');
       }
     });
 
@@ -474,72 +645,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       subscription.unsubscribe();
     };
   }, []);
-
-  // Routing State with browser URL synchronization (HTML5 History API)
-  const initialRoute = typeof window !== 'undefined' ? getViewForPath(window.location.pathname) : { view: 'dashboard' };
-
-  const [activeView, setActiveViewState] = useState<string>(() => {
-    // If the browser already visited a specific path like /documents, /track, /shipments, etc.
-    if (typeof window !== 'undefined' && window.location.pathname && window.location.pathname !== '/') {
-      return initialRoute.view;
-    }
-    const hasSession = localStorage.getItem('maps_supabase_session');
-    const isOnboarded = localStorage.getItem('maps_onboarding_completed') === 'true';
-    if (hasSession && isOnboarded) return 'dashboard';
-    return 'login';
-  });
-  const [viewParam, setViewParamState] = useState<string | undefined>(initialRoute.param);
-
-  // Synchronized route setters: seamlessly updates browser URL bar (e.g. /documents, /shipments)
-  const setActiveView = (action: string | ((prev: string) => string)) => {
-    setActiveViewState(prev => {
-      const nextView = typeof action === 'function' ? action(prev) : action;
-      if (typeof window !== 'undefined') {
-        const targetPath = getPathForView(nextView, viewParam);
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState({ view: nextView, param: viewParam }, '', targetPath);
-        }
-      }
-      return nextView;
-    });
-  };
-
-  const setViewParam = (action?: string | ((prev?: string) => string | undefined)) => {
-    setViewParamState(prev => {
-      const nextParam = typeof action === 'function' ? action(prev) : action;
-      if (typeof window !== 'undefined') {
-        const targetPath = getPathForView(activeView, nextParam);
-        if (window.location.pathname !== targetPath) {
-          window.history.pushState({ view: activeView, param: nextParam }, '', targetPath);
-        }
-      }
-      return nextParam;
-    });
-  };
-
-  // Sync initial URL if at root
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/') {
-      const targetPath = getPathForView(activeView, viewParam);
-      window.history.replaceState({ view: activeView, param: viewParam }, '', targetPath);
-    }
-  }, []);
-
-  // Listen to browser Back and Forward navigation buttons
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handlePopState = () => {
-      const route = getViewForPath(window.location.pathname);
-      setActiveViewState(route.view);
-      setViewParamState(route.param);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  const [universalSearch, setUniversalSearch] = useState<string>('');
 
   // Domain Datasets with local storage persistence fallback
   const [shipments, setShipments] = useState<Shipment[]>(() => {
@@ -633,11 +738,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [communications, setCommunications] = useState<CommunicationMessage[]>(() => {
     const local = localStorage.getItem('maps_comms');
     return local ? JSON.parse(local) : MOCK_COMMUNICATIONS;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(() => {
-    const local = localStorage.getItem('maps_audit');
-    return local ? JSON.parse(local) : MOCK_AUDIT_LOGS;
   });
 
   // Container Control State (Module 16)
@@ -897,39 +997,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('maps_mbls', JSON.stringify(mbls));
   }, [mbls]);
-
-  // Toasts
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const showToast = (type: ToastMessage['type'], title: string, description?: string) => {
-    const id = Date.now().toString() + Math.random().toString().slice(2, 5);
-    setToasts(prev => [...prev, { id, type, title, description }]);
-    setTimeout(() => {
-      removeToast(id);
-    }, 4500);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  // Print Document Modal
-  const [activePrintDoc, setActivePrintDoc] = useState<{ type: 'HBL' | 'MBL' | 'DO' | 'INVOICE' | 'QUOTE' | 'MANIFEST' | 'STATEMENT' | 'DGD' | 'ARRIVAL_NOTICE' | 'VGM' | 'COVER_NOTE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'; data: any } | null>(null);
-
-  // Audit logging helper
-  const addAuditLog = (action: string, module: string, entityId: string, details: string) => {
-    const now = new Date();
-    const formatted = `${now.getDate()} Oct 2026 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const item: AuditLogItem = {
-      id: 'aud-' + Date.now(),
-      timestamp: formatted,
-      user: currentUser.name,
-      action,
-      module,
-      entityId,
-      details
-    };
-    setAuditLogs(prev => [item, ...prev]);
-  };
 
   const [automationHistory, setAutomationHistory] = useState<AutomationResult[]>([]);
 

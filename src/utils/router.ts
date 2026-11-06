@@ -32,7 +32,6 @@ export const VIEW_TO_PATH: Record<string, string> = {
   ccontrol_public: '/ccontrol',
   login: '/login',
   register: '/register',
-  landing_page: '/landing',
 };
 
 export const PATH_TO_VIEW: Record<string, string> = {
@@ -84,9 +83,9 @@ export const PATH_TO_VIEW: Record<string, string> = {
   '/ccontrol': 'ccontrol_public',
   '/login': 'login',
   '/register': 'register',
-  '/landing': 'landing_page',
-  '/landing_page': 'landing_page',
-  '/': 'landing_page',
+  '/landing': 'login',
+  '/landing_page': 'login',
+  '/': 'login',
 };
 
 /**
@@ -104,7 +103,7 @@ export function getPathForView(view: string, param?: string): string {
     return `/ccontrol/${encodeURIComponent(param)}`;
   }
 
-  return VIEW_TO_PATH[view] || '/dashboard';
+  return VIEW_TO_PATH[view] || '/login';
 }
 
 /**
@@ -136,6 +135,7 @@ export function getViewForPath(pathname: string): RouteInfo {
     return { view: directView };
   }
 
-  return { view: 'dashboard' };
+  // By default, every unmapped route resolves to login
+  return { view: 'login' };
 }
 

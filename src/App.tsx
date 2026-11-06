@@ -31,7 +31,6 @@ import { CommunicationHubPage } from './pages/communication';
 import { ReportsPage } from './pages/reports';
 import { SettingsPage } from './pages/settings';
 import { IntelligencePage } from './pages/intelligence';
-import { LandingPage } from './pages/landing';
 import { PublicContainerTrackingView } from './components/container-control/PublicContainerTrackingView';
 import { DeliveryOrderPage, CreateDeliveryOrderModal } from './pages/delivery-orders';
 import { ExportManifestPage, ImportManifestPage } from './pages/manifests';
@@ -108,95 +107,73 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Login Page standalone view
-  if (activeView === 'login') {
-    return (
-      <>
-        <LoginPage
-          onNavigateToRegister={() => setActiveView('register')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
-        <ToastContainer />
-      </>
-    );
-  }
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SECURED ROUTE GUARDS & PUBLIC ROUTES
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  // Register Page standalone view (8-digit OTP, Password, Firm details)
-  if (activeView === 'register') {
-    return (
-      <>
-        <RegisterPage
-          onNavigateToLogin={() => setActiveView('login')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
-        <ToastContainer />
-      </>
-    );
-  }
-
-  // Landing Page standalone view
-  if (activeView === 'landing_page') {
-    return (
-      <>
-        <LandingPage onEnterApp={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')} />
-        <ToastContainer />
-      </>
-    );
-  }
-
-  // Public Tracking standalone view
+  // 1. Dedicated Public Routes (Shipment tracking & Container tracking)
   if (activeView === 'public_tracking') {
     return (
       <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6] p-4 sm:p-8">
         <PublicTrackingPage
           initialShipmentId={viewParam || 'MAPS-240342'}
-          onNavigateHome={() => setActiveView(isAuthenticated ? 'dashboard' : 'login')}
+          onNavigateHome={() => setActiveView('login')}
         />
         <ToastContainer />
       </div>
     );
   }
 
-  // Public Container Control Tracking view (/ccontrol/[container])
   if (activeView === 'ccontrol_public') {
     return (
       <div className="min-h-screen bg-[#0A1628] text-[#F4EFE6]">
         <PublicContainerTrackingView
           containerNumber={viewParam || 'MSKU2345678'}
-          onBack={() => setActiveView(isAuthenticated ? 'container_control' : 'login')}
+          onBack={() => setActiveView('login')}
         />
         <ToastContainer />
       </div>
     );
   }
 
-  // Route Guard 1: Require authentication for internal ERP views
-  if (!isAuthenticated) {
+  // 2. Active Registration Route
+  // MUST ALWAYS render RegisterPage when on /register (even when Supabase session gets created at Step 2)
+  // The user must complete Step 3 (Set Password) and Step 4 (Add Firm Details) before reaching Dashboard!
+  if (activeView === 'register') {
     return (
       <>
-        <LoginPage
-          onNavigateToRegister={() => setActiveView('register')}
-          onNavigateToLanding={() => setActiveView('landing_page')}
-        />
+        <RegisterPage onNavigateToLogin={() => {
+          logout();
+          setActiveView('login');
+        }} />
         <ToastContainer />
       </>
     );
   }
 
-  // Route Guard 2: Require Complete Registration & Firm Compliance (GSTIN, Legal Name, Phone)
-  // Prevents partially-registered or unconfigured accounts from accessing internal ERP views!
+  // 3. When Unauthenticated: Lock down all internal routes and render /login
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage onNavigateToRegister={() => setActiveView('register')} />
+        <ToastContainer />
+      </>
+    );
+  }
+
+  // 4. Authenticated Users: Check if the user is already registered (onboarding completed + firm details)
+  // When a user is already registered, only then it should move towards the dashboard!
   const hasCompletedCompliance = isRegistrationComplete(currentUser, firmDetails);
   if (!hasCompletedCompliance) {
     return (
       <>
         <RegisterPage
           initialStep="FIRM"
-          forcedComplianceMessage="Security Warning: Mandatory firm compliance details (Legal Entity Name, GSTIN, and Phone Number) are missing. Complete onboarding to access MAPS NVOCC Pro."
+          forcedComplianceMessage="Mandatory Firm Onboarding: Please provide your company legal entity name, GSTIN, and registered office to activate your workspace."
           onNavigateToLogin={() => {
             logout();
             setActiveView('login');
           }}
-          onNavigateToLanding={() => setActiveView('landing_page')}
         />
         <ToastContainer />
       </>

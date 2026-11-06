@@ -20,11 +20,13 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../services/supabase';
 import {
   sendRegistrationEmailOtp,
   verifyRegistrationEmailOtp,
   setUserPassword,
   saveFirmDetails,
+  syncUserToDatabase,
   FirmDetailsPayload
 } from '../../services/authService';
 import {
@@ -47,22 +49,65 @@ export type RegistrationStep = 'CONTACT' | 'OTP' | 'PASSWORD' | 'FIRM' | 'SUCCES
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({
   onNavigateToLogin,
-  onNavigateToLanding,
   initialStep = 'CONTACT',
   forcedComplianceMessage
 }) => {
-  const { showToast, setAuthSession, updateCurrentUser, updateFirmDetails, setActiveView, currentUser, firmDetails } = useApp();
+  const { showToast, setAuthSession, updateCurrentUser, updateFirmDetails, setActiveView, currentUser, firmDetails, isAuthenticated, logout } = useApp();
 
-  // Current registration flow step
-  const [currentStep, setCurrentStep] = useState<RegistrationStep>(initialStep);
+  const handleGoToLogin = () => {
+    try {
+      sessionStorage.removeItem('maps_staged_reg');
+    } catch {}
+    if (logout) {
+      logout();
+    }
+    if (onNavigateToLogin) {
+      onNavigateToLogin();
+    } else {
+      setActiveView('login');
+    }
+  };
+
+  // Current registration flow step (preserves in-progress wizard steps across remounts)
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>(() => {
+    if (initialStep && initialStep !== 'CONTACT') return initialStep;
+
+    try {
+      const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+      if (stagedRaw) {
+        const staged = JSON.parse(stagedRaw);
+        if (staged.otpVerified && !staged.passwordSet) return 'PASSWORD';
+        if (staged.otpVerified && staged.passwordSet) return 'FIRM';
+        if (staged.email) return 'OTP';
+      }
+    } catch {}
+
+    if (isAuthenticated) return 'FIRM';
+    return 'CONTACT';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(forcedComplianceMessage || null);
   const [showSignInRedirect, setShowSignInRedirect] = useState(false);
 
-  // Step 1: Contact info (Clean placeholders only - no pre-filled text)
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  // Step 1: Contact info (restored from staged registration session if available)
+  const [fullName, setFullName] = useState(() => {
+    try {
+      const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+      return stagedRaw ? JSON.parse(stagedRaw).fullName || '' : '';
+    } catch { return ''; }
+  });
+  const [email, setEmail] = useState(() => {
+    try {
+      const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+      return stagedRaw ? JSON.parse(stagedRaw).email || '' : '';
+    } catch { return ''; }
+  });
+  const [phone, setPhone] = useState(() => {
+    try {
+      const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+      return stagedRaw ? JSON.parse(stagedRaw).phone || '' : '';
+    } catch { return ''; }
+  });
 
   // Step 2: 8-digit OTP inputs
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(8).fill(''));
@@ -233,24 +278,51 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
-    const fullCode = otpDigits.join('');
-    if (fullCode.length !== 8) {
-      setErrorMessage('Please enter the complete 8-digit verification code.');
+    const rawDigits = otpDigits.join('');
+    const codeToVerify = (rawDigits.length === 6 || rawDigits.length === 8)
+      ? rawDigits
+      : (otpDigits.slice(0, 6).join('').length === 6 ? otpDigits.slice(0, 6).join('') : rawDigits);
+
+    if (codeToVerify.length !== 6 && codeToVerify.length !== 8) {
+      setErrorMessage('Please enter the complete 6-digit or 8-digit verification code.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await verifyRegistrationEmailOtp(email, fullCode);
+      const result = await verifyRegistrationEmailOtp(email, codeToVerify);
 
       if (!result.success || !result.data) {
-        setErrorMessage(result.error || 'Invalid or expired 8-digit OTP code');
+        setErrorMessage(result.error || 'Invalid or expired OTP verification code');
         setIsLoading(false);
         return;
       }
 
       setVerifiedSession(result.data);
       showToast('success', 'Email Identity Confirmed', 'Your email address has been verified successfully!');
+
+      // Preserve verification state in sessionStorage
+      try {
+        const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+        const staged = stagedRaw ? JSON.parse(stagedRaw) : {};
+        sessionStorage.setItem('maps_staged_reg', JSON.stringify({
+          ...staged,
+          email,
+          fullName,
+          phone,
+          otpVerified: true,
+          passwordSet: false,
+          onboardingCompleted: false,
+        }));
+      } catch {}
+
+      // Pre-sync verified user into public.users
+      if (result.data.user) {
+        syncUserToDatabase(result.data.user, null).catch(err => {
+          console.warn('Initial public.users sync notice:', err);
+        });
+      }
+
       // ADVANCE TO PASSWORD (DO NOT ELEVATE SESSION TO DASHBOARD YET)
       setCurrentStep('PASSWORD');
     } catch (err: any) {
@@ -308,6 +380,17 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         setIsLoading(false);
         return;
       }
+
+      // Update progress in sessionStorage
+      try {
+        const stagedRaw = sessionStorage.getItem('maps_staged_reg');
+        const staged = stagedRaw ? JSON.parse(stagedRaw) : {};
+        sessionStorage.setItem('maps_staged_reg', JSON.stringify({
+          ...staged,
+          passwordSet: true,
+          onboardingCompleted: false,
+        }));
+      } catch {}
 
       showToast('success', 'Password Configured', 'Master password defined successfully.');
       // ADVANCE TO FIRM DETAILS (DO NOT ELEVATE SESSION TO DASHBOARD YET)
@@ -481,6 +564,24 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         );
       }
 
+      // Explicitly persist to public.users & public.tenants in PostgreSQL
+      try {
+        const userToSync = verifiedSession?.user || (await supabase?.auth.getUser())?.data?.user;
+        if (userToSync) {
+          const syncRes = await syncUserToDatabase(userToSync, payload);
+          if (!syncRes.success) {
+            console.error('Database public.users sync notice:', syncRes.error);
+          }
+        }
+      } catch (dbSyncErr) {
+        console.warn('Database sync call warning:', dbSyncErr);
+      }
+
+      // Mark staged registration completed and cleanup
+      try {
+        sessionStorage.removeItem('maps_staged_reg');
+      } catch {}
+
       showToast('success', 'Firm Registered & Verified', `${payload.legalName} is now fully compliant and active!`);
       setCurrentStep('SUCCESS');
     } catch (err: any) {
@@ -502,11 +603,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
       {/* Top Header */}
       <header className="px-6 py-5 flex items-center justify-between border-b border-[#15233C]/80 bg-[#0A1628]/80 backdrop-blur-md relative z-10">
-        <div
-          onClick={onNavigateToLanding}
-          className="flex items-center gap-3 cursor-pointer group"
-        >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#E88B2A] to-[#FFB356] flex items-center justify-center font-black text-slate-950 shadow-md shadow-[#E88B2A]/20 group-hover:scale-105 transition-transform">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#E88B2A] to-[#FFB356] flex items-center justify-center font-black text-slate-950 shadow-md shadow-[#E88B2A]/20">
             <Ship className="w-5 h-5 text-slate-950" />
           </div>
           <div>
@@ -525,7 +623,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         <div className="flex items-center gap-3">
           <span className="text-xs text-[#A8A299] hidden sm:inline">Already registered?</span>
           <button
-            onClick={onNavigateToLogin}
+            onClick={handleGoToLogin}
             className="flex items-center gap-1.5 text-xs font-semibold text-[#F4EFE6] hover:text-[#E88B2A] px-3.5 py-1.5 rounded-lg bg-[#16263F] border border-[#263D64] hover:bg-[#1D3251] transition-all cursor-pointer"
           >
             <span>Sign In</span>
@@ -582,7 +680,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   <div className="mt-2.5">
                     <button
                       type="button"
-                      onClick={onNavigateToLogin}
+                      onClick={handleGoToLogin}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#E88B2A] text-slate-950 hover:bg-[#FF9A3C] transition-colors cursor-pointer"
                     >
                       <span>Sign In to Existing Account</span>
@@ -717,7 +815,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   Verify Email Address
                 </h2>
                 <p className="text-xs text-[#A8A299] mt-1">
-                  8-digit verification code delivered to your registered email: <strong className="text-amber-400 font-mono">{email}</strong>
+                  Verification code delivered to your registered email: <strong className="text-amber-400 font-mono">{email}</strong>
                 </p>
                 <div className="flex items-center justify-center gap-2 mt-1">
                   <span className="text-[11px] text-[#A8A299]">
@@ -818,7 +916,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isLoading || otpDigits.join('').length !== 8}
+                    disabled={isLoading || (otpDigits.join('').length !== 6 && otpDigits.join('').length !== 8)}
                     className="flex-1 py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-[#E88B2A] to-[#D47B1C] hover:from-[#FF9A3C] hover:to-[#E88B2A] text-slate-950 flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#E88B2A]/20 cursor-pointer disabled:opacity-50"
                   >
                     {isLoading ? (
