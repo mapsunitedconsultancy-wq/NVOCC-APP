@@ -54,6 +54,7 @@ const AppContent: React.FC = () => {
     currentUser,
     isAuthenticated,
     firmDetails,
+    isPasswordRecovery,
     logout
   } = useApp();
 
@@ -151,8 +152,9 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // 3. When Unauthenticated: Lock down all internal routes and render /login
-  if (!isAuthenticated) {
+  // 3. Login & Password Recovery Route:
+  // MUST render LoginPage when unauthenticated, when activeView is 'login', OR when in password recovery mode!
+  if (!isAuthenticated || activeView === 'login' || isPasswordRecovery) {
     return (
       <>
         <LoginPage onNavigateToRegister={() => setActiveView('register')} />

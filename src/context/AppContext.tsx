@@ -118,6 +118,8 @@ interface AppContextType {
   isAuthenticated: boolean;
   authSession: any;
   setAuthSession: (session: any, user?: any) => void;
+  isPasswordRecovery: boolean;
+  setIsPasswordRecovery: (isRecovery: boolean) => void;
   logout: () => Promise<void>;
 
   // Automation & Interconnection Chains
@@ -405,6 +407,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [viewParam, setViewParamState] = useState<string | undefined>(initialRoute.param);
   const isPopStateRef = useRef(false);
 
+  // Password Recovery Flow Control (persisted in sessionStorage to guard during session hydration)
+  const [isPasswordRecovery, setIsPasswordRecoveryState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const stored = sessionStorage.getItem('maps_password_recovery');
+      return hash.includes('type=recovery') || search.includes('type=recovery') || stored === 'true';
+    }
+    return false;
+  });
+
+  const setIsPasswordRecovery = useCallback((val: boolean) => {
+    setIsPasswordRecoveryState(val);
+    if (typeof window !== 'undefined') {
+      try {
+        if (val) {
+          sessionStorage.setItem('maps_password_recovery', 'true');
+        } else {
+          sessionStorage.removeItem('maps_password_recovery');
+        }
+      } catch {}
+    }
+  }, []);
+
   const setActiveView = useCallback((action: string | ((prev: string) => string)) => {
     setActiveViewState(prev => {
       const nextView = typeof action === 'function' ? action(prev) : action;
@@ -551,6 +577,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } else {
       // When authenticated:
+      // If user is undergoing password recovery, NEVER redirect to dashboard!
+      if (isPasswordRecovery) {
+        if (activeView !== 'login') {
+          setActiveViewState('login');
+        }
+        return;
+      }
+
       // If user is on /login and already fully registered, redirect to dashboard
       if (activeView === 'login') {
         const isRegistered = isRegistrationComplete(currentUser, firmDetails);
@@ -562,7 +596,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // The user is actively filling out the registration form (Password, Firm Details).
       // They will be moved to the dashboard only upon completing registration.
     }
-  }, [isAuthenticated, activeView, setActiveView, currentUser, firmDetails]);
+  }, [isAuthenticated, activeView, setActiveView, currentUser, firmDetails, isPasswordRecovery]);
 
   const setAuthSession = (session: any, authUser?: any) => {
     setAuthSessionState(session);
@@ -585,6 +619,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = async () => {
+    setIsPasswordRecovery(false);
     try {
       await signOutUser();
     } catch (e) {
@@ -622,7 +657,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+        setActiveViewState('login');
+      }
       if (session) {
         setAuthSessionState(session);
         setIsAuthenticated(true);
@@ -1733,6 +1772,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAuthenticated,
         authSession,
         setAuthSession,
+        isPasswordRecovery,
+        setIsPasswordRecovery,
         logout,
         theme,
         toggleTheme,
