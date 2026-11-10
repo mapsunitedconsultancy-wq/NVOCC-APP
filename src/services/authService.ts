@@ -763,20 +763,22 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
   return sendPasswordResetOtp(email);
 }
 
+export { sendPasswordResetConfirmationEmail } from './integrationsService';
+
 /**
  * Password Reset Step 2: Verify the 8-Digit OTP code from email
  */
 export async function verifyPasswordResetOtp(
   email: string,
   token: string
-): Promise<AuthResult<{ session?: any }>> {
+): Promise<AuthResult<{ session?: any; user?: any }>> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim().replace(/\s+/g, '');
 
   if (!cleanToken || (cleanToken.length !== 6 && cleanToken.length !== 8)) {
     return {
       success: false,
-      error: 'Please enter the complete 8-digit verification code from your email.'
+      error: 'Please enter the complete verification code from your email.'
     };
   }
 
@@ -803,7 +805,7 @@ export async function verifyPasswordResetOtp(
         return { success: false, error: res.error.message };
       }
 
-      return { success: true, data: { session: res.data.session } };
+      return { success: true, data: { session: res.data.session, user: res.data.user } };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to verify recovery OTP.' };
     }
@@ -816,7 +818,7 @@ export async function verifyPasswordResetOtp(
 /**
  * Password Reset Step 3: Set the new password after OTP verification
  */
-export async function updatePasswordAfterReset(newPassword: string): Promise<AuthResult> {
+export async function updatePasswordAfterReset(newPassword: string): Promise<AuthResult<{ user?: any; session?: any }>> {
   if (!newPassword || newPassword.length < 8) {
     return { success: false, error: 'New password must be at least 8 characters long.' };
   }
@@ -831,16 +833,16 @@ export async function updatePasswordAfterReset(newPassword: string): Promise<Aut
         return { success: false, error: error.message };
       }
 
-      // Sign out recovery session cleanly so user logs in with new password
-      await supabase.auth.signOut();
-      return { success: true, data };
+      // Keep authenticated session active so the user seamlessly transitions into Dashboard
+      const { data: sessionData } = await supabase.auth.getSession();
+      return { success: true, data: { user: data.user, session: sessionData?.session } };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to update password.' };
     }
   }
 
   // Local / offline fallback
-  return { success: true };
+  return { success: true, data: { user: { email: 'user@mapsfreight.com' } } };
 }
 
 /**

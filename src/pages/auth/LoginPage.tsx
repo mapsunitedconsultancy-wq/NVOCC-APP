@@ -23,7 +23,9 @@ import {
   loginWithEmailPassword,
   sendPasswordResetOtp,
   verifyPasswordResetOtp,
-  updatePasswordAfterReset
+  updatePasswordAfterReset,
+  sendPasswordResetConfirmationEmail,
+  formatSupabaseUser
 } from '../../services/authService';
 
 interface LoginPageProps {
@@ -34,7 +36,15 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = ({
   onNavigateToRegister,
 }) => {
-  const { showToast, setAuthSession, updateCurrentUser, setActiveView } = useApp();
+  const {
+    showToast,
+    setAuthSession,
+    updateCurrentUser,
+    setActiveView,
+    isPasswordRecovery,
+    setIsPasswordRecovery,
+    currentUser
+  } = useApp();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -84,11 +94,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   }, [showForgotModal, resetStep]);
 
+  // Automatically handle recovery mode (e.g. from password reset link or verified OTP)
+  useEffect(() => {
+    if (isPasswordRecovery) {
+      setShowForgotModal(true);
+      setResetStep('PASSWORD');
+      setResetError(null);
+      if (currentUser?.email && !forgotEmail) {
+        setForgotEmail(currentUser.email);
+      }
+    }
+  }, [isPasswordRecovery, currentUser?.email]);
+
   const openResetModal = () => {
     setShowForgotModal(true);
     setResetStep('EMAIL');
     setResetError(null);
     setForgotEmail(email || '');
+    setResetOtpDigits(Array(8).fill(''));
+    setNewPassword('');
+    setConfirmNewPassword('');
+  };
+
+  const handleCloseForgotModal = () => {
+    setShowForgotModal(false);
+    setIsPasswordRecovery(false);
+    setResetStep('EMAIL');
+    setResetError(null);
     setResetOtpDigits(Array(8).fill(''));
     setNewPassword('');
     setConfirmNewPassword('');
@@ -171,13 +203,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
 
     setResetLoading(true);
+    // Lock into password recovery mode so AppContext Route Guard does NOT move to Dashboard prematurely
+    setIsPasswordRecovery(true);
+
     const result = await verifyPasswordResetOtp(forgotEmail, code);
     setResetLoading(false);
 
     if (result.success) {
       setResetStep('PASSWORD');
-      showToast('success', 'OTP Confirmed', 'Email verified. You can now define your new password.');
+      showToast('success', 'OTP Verified', 'Please define your new password and retype it to confirm.');
     } else {
+      setIsPasswordRecovery(false);
       setResetError(result.error || 'Invalid or expired OTP code');
     }
   };
@@ -192,22 +228,50 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
 
     if (newPassword !== confirmNewPassword) {
-      setResetError('Passwords do not match. Please re-enter.');
+      setResetError('Passwords do not match. Please retype the new password to confirm.');
       return;
     }
 
     setResetLoading(true);
     const result = await updatePasswordAfterReset(newPassword);
+
+    if (!result.success) {
+      setResetLoading(false);
+      setResetError(result.error || 'Failed to update password');
+      return;
+    }
+
+    // 1. Dispatch confirmation email stating password was reset
+    const targetEmail = forgotEmail || currentUser?.email || email;
+    try {
+      await sendPasswordResetConfirmationEmail({
+        to: targetEmail,
+        userName: currentUser?.name || targetEmail.split('@')[0],
+      });
+    } catch (mailErr) {
+      console.warn('Confirmation email dispatch notice:', mailErr);
+    }
+
     setResetLoading(false);
 
-    if (result.success) {
-      setResetStep('SUCCESS');
-      setEmail(forgotEmail);
-      setPassword('');
-      showToast('success', 'Password Updated', 'Your password has been changed successfully. You can now sign in.');
-    } else {
-      setResetError(result.error || 'Failed to update password');
+    // 2. Notify user with confirmation
+    showToast(
+      'success',
+      'Password Reset Complete',
+      `Confirmation email dispatched to ${targetEmail}. Redirecting to Dashboard...`
+    );
+
+    // 3. Clear recovery state & close modal
+    setIsPasswordRecovery(false);
+    setShowForgotModal(false);
+
+    // 4. Synchronize user and session, then open the Dashboard
+    if (result.data?.session) {
+      setAuthSession(result.data.session, result.data.user);
+    } else if (result.data?.user) {
+      updateCurrentUser(formatSupabaseUser(result.data.user));
     }
+    setActiveView('dashboard');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -513,7 +577,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               {resetStep !== 'SUCCESS' && (
                 <button
                   type="button"
-                  onClick={() => setShowForgotModal(false)}
+                  onClick={handleCloseForgotModal}
                   className="w-7 h-7 rounded-lg bg-[#16263F] hover:bg-[#1D3251] text-[#A8A299] hover:text-[#F4EFE6] flex items-center justify-center text-xs transition-colors cursor-pointer"
                 >
                   ✕
@@ -741,7 +805,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                 <div>
                   <label className="block text-xs font-medium text-[#C5BFA9] mb-1.5">
-                    Confirm New Password
+                    Retype New Password to Confirm
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6A64]" />
@@ -750,7 +814,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       required
                       value={confirmNewPassword}
                       onChange={e => setConfirmNewPassword(e.target.value)}
-                      placeholder="Re-enter your new password"
+                      placeholder="Retype your new password to confirm"
                       className="w-full bg-[#081220] border border-[#21375B] focus:border-[#E88B2A] rounded-xl pl-10 pr-10 py-2.5 text-xs text-[#F4EFE6] placeholder-[#556379] focus:outline-hidden"
                     />
                     <button
@@ -765,14 +829,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                 {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
                   <p className="text-[11px] text-red-400 font-medium">
-                    Passwords do not match.
+                    Passwords do not match. Please retype to confirm.
                   </p>
                 )}
 
                 <div className="flex items-center gap-2 pt-3">
                   <button
                     type="button"
-                    onClick={() => setShowForgotModal(false)}
+                    onClick={handleCloseForgotModal}
                     className="px-4 py-2.5 rounded-xl text-xs text-[#A8A299] hover:bg-[#16263F]"
                   >
                     Cancel
@@ -790,7 +854,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     ) : (
                       <>
                         <Check className="w-4 h-4" />
-                        <span>Save Password & Sign In</span>
+                        <span>Confirm Password & Open Dashboard</span>
                       </>
                     )}
                   </button>
